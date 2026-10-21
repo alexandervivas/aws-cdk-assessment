@@ -2,8 +2,9 @@ package com.tikkie.person.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.InstanceOfAssertFactories.list;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import java.util.ArrayList;
@@ -18,7 +19,7 @@ class FieldErrorsTest {
 
         CountryCode country = errors.capture(() -> CountryCode.parse("address.countryCode", "NL"));
 
-        assertThat(country).isEqualTo(new CountryCode("NL"));
+        assertThat(country).isEqualTo(CountryCode.NL);
         assertThatCode(errors::throwIfAny).doesNotThrowAnyException();
     }
 
@@ -31,14 +32,22 @@ class FieldErrorsTest {
 
         assertThat(name).isNull();
         assertThat(country).isNull();
-        assertThatThrownBy(errors::throwIfAny)
-                .isInstanceOf(ValidationException.class)
-                .extracting(e -> ((ValidationException) e).errors())
-                .asInstanceOf(list(FieldError.class))
+        ValidationException exception = catchThrowableOfType(ValidationException.class, errors::throwIfAny);
+        assertThat(exception.errors())
                 .extracting(FieldError::field, FieldError::code)
                 .containsExactly(
                         tuple("firstName", "required"),
                         tuple("address.countryCode", "unknown_country"));
+    }
+
+    @Test
+    void propagatesExceptionsOtherThanValidation() {
+        FieldErrors errors = new FieldErrors();
+
+        assertThatIllegalStateException().isThrownBy(() -> errors.capture(() -> {
+            throw new IllegalStateException("bug");
+        }));
+        assertThatCode(errors::throwIfAny).doesNotThrowAnyException();
     }
 
     @Test
@@ -53,14 +62,11 @@ class FieldErrorsTest {
 
     @Test
     void parseFailureMessageDoesNotContainRejectedValue() {
-        assertThatThrownBy(() -> PersonName.parse("lastName", "Example42"))
-                .isInstanceOf(ValidationException.class)
-                .satisfies(e -> {
-                    ValidationException exception = (ValidationException) e;
-                    assertThat(exception.getMessage()).doesNotContain("Example42");
-                    assertThat(exception.errors()).allSatisfy(error ->
-                            assertThat(error.message()).doesNotContain("Example42"));
-                });
+        ValidationException exception =
+                catchThrowableOfType(ValidationException.class, () -> PersonName.parse("lastName", "Example42"));
+
+        assertThat(exception.getMessage()).doesNotContain("Example42");
+        assertThat(exception.errors()).allSatisfy(error -> assertThat(error.message()).doesNotContain("Example42"));
     }
 
     @Test

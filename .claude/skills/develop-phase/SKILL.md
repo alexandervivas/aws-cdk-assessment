@@ -13,12 +13,11 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 
 1. **One phase = one stack of PRs.** The bottom PR targets `main`; each PR above targets the one below.
 2. **Full vertical slice per PR.** Production code and its tests together, `./mvnw verify` green, `main` stays deployable after each merge.
-3. **Ceiling: 400 lines of hand-written Java per PR, tests included. No floor.** Excluded: POMs, Maven wrapper, `cdk.json`, `package*.json`, workflow YAML, snapshot JSON, Markdown, k6 JavaScript, `.claude/` files. Measure with:
+3. **Target: about 400 lines of hand-written Java per PR, tests included. No floor. Correctness beats the ceiling:** never drop a test, an invariant or a null check to fit. Over 400 → split at a natural seam (a new stack layer). If no split makes sense, go over and state the count and the reason in the PR body. The owner approved this on 2026-10-21. Excluded: POMs, Maven wrapper, `cdk.json`, `package*.json`, workflow YAML, snapshot JSON, Markdown, k6 JavaScript, `.claude/` files. Measure with:
    ```bash
    git diff --numstat <parent-branch>...HEAD -- '*.java' | awk '{a+=$1} END {print a}'
    ```
    It counts committed changes only, so run it after committing.
-   Over 400 → split the PR before submitting (`gh stack modify` or a new `gh stack add` layer).
 4. **TDD always.** Failing test, run it and see red, minimal code, green, refactor. The implementer reports red and green output.
 5. **DDD boundaries.** `com.tikkie.person.domain` imports nothing from `software.amazon..`, `com.fasterxml..`, `com.amazonaws..` or `..adapter..` (ArchUnit enforces from phase 1). `application` holds use cases and ports. Adapters live under `adapter.in` / `adapter.out`.
 6. **No comment noise.** No narrating javadoc, no commented-out code, no "// create the table". A comment only explains a non-obvious *why*.
@@ -36,8 +35,10 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 | 1a | `p1a-names-and-sensitive` | `Sensitive<T>`, `FieldError`, `ValidationException`, `PersonName`, `CountryCode` + unit tests | no |
 | 1b | `p1b-phone-address-person` | `PhoneNumber` (E.164), `PostalCode` (NL normalised), `Address`, `PersonId`, `Person` (masked `toString`), ArchUnit test | no |
 | 1c | `p1c-domain-hardening` | Review hardening for 1a/1b: record invariants, Address.parse, named limits, control chars, NL ASCII postal, phone letters/extensions, PersonId validation, ArchUnit allow-list, missing tests | no |
-| 2a | `p2a-create-person-use-case` | `CreatePersonCommand`, `CreatePersonResult` (`Created`/`Replayed`), `IdempotencyKey`, `RequestHash`, `PersonRepository` port with sealed `CreateOutcome` (`Created`, `ReplayOf`, `Conflict`), `CreatePersonUseCase`, in-memory fake + tests | yes |
-| 2b | `p2b-dynamodb-repository` | `DynamoDbPersonRepository` with `TransactWriteItems`, TTL 24 h, retry-once on non-key cancellation; Testcontainers: create, replay, conflict, concurrent duplicates | yes |
+| 1d | `p1d-domain-tests` | Tests that didn't fit 1c: one null per record component, over-limit per free-text field, code-point name length | no |
+| 2a | `p2a-idempotency-port` | `IdempotencyKey`, `RequestHash`, `CreatePersonCommand`, `CreatePersonResult`, `PersonRepository` port with sealed `CreateOutcome` (`Inserted`, `ReplayOf`, `Conflict`), `IdempotencyConflictException` + tests | yes |
+| 2b | `p2b-create-person-use-case` | `CreatePersonUseCase`, in-memory fake + use-case tests | yes |
+| 2c | `p2c-dynamodb-repository` | `DynamoDbPersonRepository` with `TransactWriteItems`, TTL 24 h, retry-once on non-key cancellation; Testcontainers: create, replay, conflict, concurrent duplicates | yes |
 | 3a | `p3a-api-handler` | DTOs, `ProblemDetails` (RFC 9457), `CreatePersonHandler` status mapping, headers, correlation ID, `Idempotency-Key` UUID check | yes |
 | 3b | `p3b-observability` | Powertools logging/metrics/tracing (programmatic, no AspectJ); handler-to-DynamoDB-Local integration test; log output asserted PII-free | yes |
 | 4a | `p4a-stage-and-storage` | `PersonServiceApp`, `EnvironmentConfig`, `PersonServiceStage`, `PersonServiceStack`, `PersonStorage` + template tests | yes |
@@ -130,7 +131,7 @@ After the phase merges: rebase the next phase's branches onto `main` in order, `
 
 - [ ] Tests first; red/green evidence recorded.
 - [ ] `./mvnw verify` green locally and in CI.
-- [ ] Hand-written Java ≤ 400 lines.
+- [ ] Hand-written Java ≤ ~400 lines, or a split, or an explicit reason in the PR body. No test or invariant cut to fit.
 - [ ] No `PutEvents` in the Lambda; only one write path.
 - [ ] No PII in logs, `toString`, events, test names, PR text.
 - [ ] `domain` free of frameworks.

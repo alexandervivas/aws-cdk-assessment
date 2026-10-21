@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import com.tikkie.person.domain.UnvalidatedPerson.UnvalidatedAddress;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class AddressTest {
@@ -81,9 +84,35 @@ class AddressTest {
     @Test
     void acceptsEveryFieldAtItsNamedLimit() {
         Address address = Address.parse(new UnvalidatedAddress("x".repeat(Address.MAX_STREET),
-                "1".repeat(Address.MAX_HOUSE_NUMBER), "A".repeat(Address.MAX_ADDITION), "10115",
-                "y".repeat(Address.MAX_CITY), "DE"), CountryCode.parse("address.countryCode", "DE"));
+                "1".repeat(Address.MAX_HOUSE_NUMBER), "A".repeat(Address.MAX_ADDITION),
+                "1".repeat(PostalCode.MAX_POSTAL_CODE), "y".repeat(Address.MAX_CITY), "DE"),
+                CountryCode.parse("address.countryCode", "DE"));
 
+        assertThat(address.street().reveal()).hasSize(Address.MAX_STREET);
+        assertThat(address.houseNumber().reveal()).hasSize(Address.MAX_HOUSE_NUMBER);
+        assertThat(address.houseNumberAddition().orElseThrow().reveal()).hasSize(Address.MAX_ADDITION);
+        assertThat(address.postalCode().value().reveal()).hasSize(PostalCode.MAX_POSTAL_CODE);
         assertThat(address.city().reveal()).hasSize(Address.MAX_CITY);
+    }
+
+    @ParameterizedTest
+    @MethodSource("oneCharacterOverTheLimit")
+    void rejectsFreeTextOneCharacterOverItsLimit(String field, UnvalidatedAddress raw) {
+        assertThatThrownBy(() -> Address.parse(raw, CountryCode.NL))
+                .isInstanceOfSatisfying(ValidationException.class, e -> assertThat(e.errors())
+                        .extracting(FieldError::field, FieldError::code)
+                        .containsExactly(tuple(field, "too_long")));
+    }
+
+    static Stream<Arguments> oneCharacterOverTheLimit() {
+        return Stream.of(
+                Arguments.of("address.street", address("x".repeat(201), "1", "A", "Amsterdam")),
+                Arguments.of("address.houseNumber", address("Damrak", "1".repeat(11), "A", "Amsterdam")),
+                Arguments.of("address.houseNumberAddition", address("Damrak", "1", "A".repeat(11), "Amsterdam")),
+                Arguments.of("address.city", address("Damrak", "1", "A", "y".repeat(101))));
+    }
+
+    private static UnvalidatedAddress address(String street, String houseNumber, String addition, String city) {
+        return new UnvalidatedAddress(street, houseNumber, addition, "1012 LG", city, "NL");
     }
 }
