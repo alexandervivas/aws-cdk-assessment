@@ -1,33 +1,38 @@
 package com.tikkie.person.domain;
 
-import java.text.Normalizer;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
 public record PersonName(Sensitive<String> value) {
 
-    private static final int MAX_LENGTH = 100;
+    static final int MAX_NAME = 100;
     private static final Pattern ALLOWED = Pattern.compile("[\\p{L}\\p{M} '’-]+");
     private static final Pattern LETTER = Pattern.compile("\\p{L}");
 
     public PersonName {
         Objects.requireNonNull(value, "value");
+        if (!isAllowed(value.reveal())) {
+            throw new IllegalArgumentException("name contains characters that are not allowed");
+        }
     }
 
     public static PersonName parse(String field, String raw) {
-        if (raw == null || raw.isBlank()) {
+        String name = FreeText.strip(raw);
+        if (name.isEmpty()) {
             throw ValidationException.of(field, "required", "must not be blank");
         }
-        // NFC first, so a decomposed "u + combining diaeresis" equals the composed letter.
-        String name = Normalizer.normalize(raw, Normalizer.Form.NFC).strip();
-        if (name.codePointCount(0, name.length()) > MAX_LENGTH) {
-            throw ValidationException.of(field, "too_long", "must be at most " + MAX_LENGTH + " characters");
+        if (name.codePointCount(0, name.length()) > MAX_NAME) {
+            throw ValidationException.of(field, "too_long", "must be at most " + MAX_NAME + " characters");
         }
-        if (!ALLOWED.matcher(name).matches() || !LETTER.matcher(name).find()) {
+        if (!isAllowed(name)) {
             throw ValidationException.of(field, "invalid_characters",
                     "may contain only letters, spaces, apostrophes and hyphens");
         }
         return new PersonName(Sensitive.of(name));
+    }
+
+    private static boolean isAllowed(String name) {
+        return ALLOWED.matcher(name).matches() && LETTER.matcher(name).find();
     }
 
     @Override

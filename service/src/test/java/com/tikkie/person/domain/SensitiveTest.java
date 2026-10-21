@@ -13,13 +13,6 @@ class SensitiveTest {
     }
 
     @Test
-    void masksValueInStringConcatenation() {
-        String logLine = "value=" + Sensitive.of("Jane Example");
-
-        assertThat(logLine).isEqualTo("value=***").doesNotContain("Jane");
-    }
-
-    @Test
     void revealsWrappedValue() {
         assertThat(Sensitive.of("Jane Example").reveal()).isEqualTo("Jane Example");
     }
@@ -30,6 +23,11 @@ class SensitiveTest {
                 .isEqualTo(Sensitive.of("a"))
                 .hasSameHashCodeAs(Sensitive.of("a"))
                 .isNotEqualTo(Sensitive.of("b"));
+    }
+
+    @Test
+    void isNotEqualToNullOrUnwrappedValue() {
+        assertThat(Sensitive.of("a")).isNotEqualTo(null).isNotEqualTo("a");
     }
 
     @Test

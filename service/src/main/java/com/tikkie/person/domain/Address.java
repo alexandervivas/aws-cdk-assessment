@@ -1,33 +1,53 @@
 package com.tikkie.person.domain;
 
-import java.text.Normalizer;
+import com.tikkie.person.domain.UnvalidatedPerson.UnvalidatedAddress;
+import java.util.Objects;
 import java.util.Optional;
 
 public record Address(
         Sensitive<String> street,
         Sensitive<String> houseNumber,
-        Sensitive<String> houseNumberAddition,
+        Optional<Sensitive<String>> houseNumberAddition,
         PostalCode postalCode,
         Sensitive<String> city,
         CountryCode countryCode) {
 
-    public Optional<Sensitive<String>> houseNumberAdditionValue() {
-        return Optional.ofNullable(houseNumberAddition);
+    static final int MAX_STREET = 200;
+    static final int MAX_HOUSE_NUMBER = 10;
+    static final int MAX_ADDITION = 10;
+    static final int MAX_CITY = 100;
+
+    public Address {
+        Objects.requireNonNull(street, "street");
+        Objects.requireNonNull(houseNumber, "houseNumber");
+        Objects.requireNonNull(houseNumberAddition, "houseNumberAddition");
+        Objects.requireNonNull(postalCode, "postalCode");
+        Objects.requireNonNull(city, "city");
+        Objects.requireNonNull(countryCode, "countryCode");
     }
 
-    static Sensitive<String> parseText(String field, String raw, int maxLength) {
-        if (raw == null || raw.isBlank()) {
-            throw ValidationException.of(field, "required", "must not be blank");
-        }
-        String text = Normalizer.normalize(raw, Normalizer.Form.NFC).strip();
-        if (text.codePointCount(0, text.length()) > maxLength) {
-            throw ValidationException.of(field, "too_long", "must be at most " + maxLength + " characters");
-        }
-        return Sensitive.of(text);
+    // A null country means the caller has already reported it; the postal code depends on it, so it is skipped.
+    static Address parse(UnvalidatedAddress raw, CountryCode country) {
+        FieldErrors errors = new FieldErrors();
+        Sensitive<String> street = errors.capture(() -> text("address.street", raw.street(), MAX_STREET));
+        Sensitive<String> houseNumber =
+                errors.capture(() -> text("address.houseNumber", raw.houseNumber(), MAX_HOUSE_NUMBER));
+        Optional<Sensitive<String>> addition = errors.capture(() -> optionalText(
+                "address.houseNumberAddition", raw.houseNumberAddition(), MAX_ADDITION));
+        Sensitive<String> city = errors.capture(() -> text("address.city", raw.city(), MAX_CITY));
+        PostalCode postalCode = country == null
+                ? null
+                : errors.capture(() -> PostalCode.parse("address.postalCode", raw.postalCode(), country));
+        errors.throwIfAny();
+        return country == null ? null : new Address(street, houseNumber, addition, postalCode, city, country);
     }
 
-    static Sensitive<String> parseOptionalText(String field, String raw, int maxLength) {
-        return raw == null || raw.isBlank() ? null : parseText(field, raw, maxLength);
+    private static Sensitive<String> text(String field, String raw, int maxLength) {
+        return Sensitive.of(FreeText.parse(field, raw, maxLength));
+    }
+
+    private static Optional<Sensitive<String>> optionalText(String field, String raw, int maxLength) {
+        return FreeText.strip(raw).isEmpty() ? Optional.empty() : Optional.of(text(field, raw, maxLength));
     }
 
     @Override
