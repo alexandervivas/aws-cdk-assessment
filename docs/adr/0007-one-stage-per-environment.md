@@ -18,7 +18,7 @@ The service must deploy at least as `dev` and `prod` from the same code, and the
 
 - Adding a stage means one more config factory and one more stage in the app.
 - Without account context both stages deploy to one account. That works, but see [0014](0014-account-level-apigateway-logging-role.md) for the shared API Gateway setting.
-- The alarm thresholds exist in the config, and the alarms themselves are planned (README Status).
+- The alarm thresholds exist in the config, and the alarms themselves are planned ([status](../roadmap.md)).
 
 ## Rejected alternatives
 
