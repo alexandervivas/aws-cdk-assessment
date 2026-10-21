@@ -81,6 +81,12 @@ Dispatch order: (1) Agent tool with `subagent_type` = the agent's name; (2) if t
 
 ## Workflow per phase
 
+**Identity rule:** every `gh stack` command runs with the owner's token passed explicitly:
+```bash
+export GH_TOKEN="$(gh auth token)"   # once per shell, before any gh stack command
+```
+Why: the `gh-stack` extension resolves its token through `gh auth token --secure-storage`, which reads the keyring's shared "active account" entry and ignores `GH_CONFIG_DIR`. On this machine that entry can belong to another GitHub account, and PR creation then fails with "must be a collaborator". `GH_TOKEN` takes precedence over the keyring. Requires gh-stack v0.2.1 or later (worktree support).
+
 ### 1. Start the stack
 ```bash
 git switch main && git pull --ff-only
