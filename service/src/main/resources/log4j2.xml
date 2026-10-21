@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+    <Appenders>
+        <!-- follow="true" writes to the current System.out, which lets tests capture the real layout. -->
+        <Console name="JsonAppender" target="SYSTEM_OUT" follow="true">
+            <JsonTemplateLayout eventTemplateUri="classpath:LambdaJsonLayout.json"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <!-- SDK request objects print every attribute value, personal data included. Powertools sets every
+             logger's level when POWERTOOLS_LOG_LEVEL or AWS_LAMBDA_LOG_LEVEL is set, or a request is sampled,
+             so the filters hold these loggers at WARN whatever their level becomes. -->
+        <Logger name="software.amazon.awssdk" level="WARN">
+            <ThresholdFilter level="WARN" onMatch="NEUTRAL" onMismatch="DENY"/>
+        </Logger>
+        <Logger name="org.apache.http" level="WARN">
+            <ThresholdFilter level="WARN" onMatch="NEUTRAL" onMismatch="DENY"/>
+        </Logger>
+        <!-- The EMF library reports its environment probe at INFO on every flush. -->
+        <Logger name="software.amazon.cloudwatchlogs.emf" level="WARN">
+            <ThresholdFilter level="WARN" onMatch="NEUTRAL" onMismatch="DENY"/>
+        </Logger>
+        <Root level="INFO">
+            <AppenderRef ref="JsonAppender"/>
+        </Root>
+    </Loggers>
+</Configuration>

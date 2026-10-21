@@ -3,7 +3,11 @@ package com.tikkie.person.adapter.in.api;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -12,8 +16,13 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent.ProxyRequestContext;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent.RequestIdentity;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.xray.AWSXRay;
+import com.amazonaws.xray.entities.Segment;
+import com.amazonaws.xray.entities.Subsegment;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tikkie.person.StandardOutput;
+import com.tikkie.person.StandardOutput.Captured;
 import com.tikkie.person.application.CallerId;
 import com.tikkie.person.application.CreatePersonCommand;
 import com.tikkie.person.application.CreatePersonResult;
@@ -26,6 +35,7 @@ import com.tikkie.person.domain.UnvalidatedPerson;
 import com.tikkie.person.domain.UnvalidatedPerson.UnvalidatedAddress;
 import com.tikkie.person.domain.ValidationException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -33,10 +43,15 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import software.amazon.lambda.powertools.metrics.Metrics;
+import software.amazon.lambda.powertools.metrics.model.MetricUnit;
 
 class CreatePersonHandlerTest {
 
@@ -65,7 +80,8 @@ class CreatePersonHandlerTest {
     private static final ObjectMapper READER = new ObjectMapper();
 
     private final CreatePersonUseCase useCase = mock(CreatePersonUseCase.class);
-    private final CreatePersonHandler handler = new CreatePersonHandler(useCase);
+    private final Metrics metrics = mock(Metrics.class);
+    private final CreatePersonHandler handler = new CreatePersonHandler(useCase, metrics);
 
     @BeforeEach
     void createsByDefault() {
@@ -385,6 +401,80 @@ class CreatePersonHandlerTest {
     }
 
     @Test
+    @ResourceLock(Resources.SYSTEM_OUT)
+    void unexpectedFailureLogsOnlyTheClassNamesOfItsCauseChain() throws Exception {
+        when(useCase.create(any()))
+                .thenThrow(new IllegalStateException("boom: Anna", new IllegalArgumentException("Damrak")));
+
+        String output = StandardOutput.capture(() -> handle(post(BODY))).output();
+
+        JsonNode errorLine = jsonLines(output).stream()
+                .filter(line -> line.get("level").asText().equals("ERROR")).findFirst().orElseThrow();
+        assertThat(errorLine.get("exception")).containsExactly(
+                READER.getNodeFactory().textNode("java.lang.IllegalStateException"),
+                READER.getNodeFactory().textNode("java.lang.IllegalArgumentException"));
+        assertThat(output).doesNotContain("boom").doesNotContain("Anna").doesNotContain("Damrak");
+    }
+
+    @ParameterizedTest
+    @CsvSource(nullValues = "none", value = {
+        "created, PersonCreated", "replayed, IdempotentReplay", "validation_failed, ValidationFailed",
+        "conflict, none", "malformed, none", "unsupported_media_type, none", "error, UnexpectedError"
+    })
+    @ResourceLock(Resources.SYSTEM_OUT)
+    void eachRequestIsLoggedWithItsOutcomeAndCountedWhenItMatters(String outcome, String metric) throws Exception {
+        APIGatewayProxyRequestEvent request = requestEndingIn(outcome);
+
+        String output = StandardOutput.capture(() -> handle(request)).output();
+
+        assertThat(jsonLines(output).stream().filter(line -> line.has("outcome")))
+                .singleElement().satisfies(line -> assertThat(line.get("outcome").asText()).isEqualTo(outcome));
+        if (metric == null) {
+            verify(metrics, never()).addMetric(anyString(), anyDouble(), any(MetricUnit.class));
+        } else {
+            verify(metrics).addMetric(metric, 1, MetricUnit.COUNT);
+            verify(metrics).flush();
+        }
+    }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_OUT)
+    void aTelemetryFailureStillReturnsTheResponse() throws Exception {
+        doThrow(new IllegalStateException("flush failed")).when(metrics).flush();
+
+        Captured<APIGatewayProxyResponseEvent> handled = StandardOutput.capture(() -> handle(post(BODY)));
+
+        assertThat(handled.result().getStatusCode()).isEqualTo(201);
+        assertThat(handled.result().getHeaders()).containsEntry("X-Correlation-Id", "req-123");
+        assertThat(READER.readTree(handled.result().getBody()).get("personId").asText())
+                .isEqualTo(PERSON_ID.toString());
+        assertThat(handled.output().lines().filter(line -> line.contains("Telemetry failed")))
+                .singleElement().asString()
+                .contains("java.lang.IllegalStateException").doesNotContain("flush failed");
+    }
+
+    @Test
+    void unexpectedFailureMarksTheSubsegmentAsAFaultWithoutItsMessage() {
+        when(useCase.create(any())).thenThrow(new IllegalStateException("boom: Anna"));
+
+        Subsegment subsegment = useCaseSubsegment(() -> handle(post(BODY)));
+
+        assertThat(subsegment.isFault()).isTrue();
+        assertThat(subsegment.getAnnotations()).containsEntry("exception", "java.lang.IllegalStateException");
+        assertThat(subsegment.getCause().getExceptions()).isEmpty();
+    }
+
+    @Test
+    void rejectedRequestIsNotAFault() {
+        when(useCase.create(any())).thenThrow(new IdempotencyConflictException());
+
+        Subsegment subsegment = useCaseSubsegment(() -> handle(post(BODY)));
+
+        assertThat(subsegment.isFault()).isFalse();
+        assertThat(subsegment.getAnnotations()).doesNotContainKey("exception");
+    }
+
+    @Test
     void illegalArgumentFromBelowIs500() throws Exception {
         when(useCase.create(any())).thenThrow(new IllegalArgumentException("bad: Anna"));
 
@@ -430,6 +520,44 @@ class CreatePersonHandlerTest {
         assertThat(problem.get("detail").asText()).isNotBlank();
         assertThat(problem.get("correlationId").asText()).isEqualTo(response.getHeaders().get("X-Correlation-Id"));
         return problem;
+    }
+
+    private APIGatewayProxyRequestEvent requestEndingIn(String outcome) {
+        switch (outcome) {
+            case "replayed" -> when(useCase.create(any()))
+                    .thenReturn(new CreatePersonResult.Replayed(PERSON_ID, CREATED_AT));
+            case "validation_failed" -> when(useCase.create(any())).thenThrow(new ValidationException(
+                    List.of(new FieldError("firstName", "required", "must not be blank"))));
+            case "conflict" -> when(useCase.create(any())).thenThrow(new IdempotencyConflictException());
+            case "error" -> when(useCase.create(any())).thenThrow(new IllegalStateException("boom"));
+            case "malformed" -> {
+                return post("[]");
+            }
+            case "unsupported_media_type" -> {
+                return post(BODY).withHeaders(Map.of("Content-Type", "text/plain"));
+            }
+            default -> {
+            }
+        }
+        return post(BODY);
+    }
+
+    private static Subsegment useCaseSubsegment(Runnable action) {
+        Segment segment = AWSXRay.beginSegment("handler-test");
+        try {
+            action.run();
+            return segment.getSubsegments().getFirst();
+        } finally {
+            AWSXRay.clearTraceEntity();
+        }
+    }
+
+    private static List<JsonNode> jsonLines(String output) throws Exception {
+        List<JsonNode> lines = new ArrayList<>();
+        for (String line : output.lines().filter(text -> text.startsWith("{")).toList()) {
+            lines.add(READER.readTree(line));
+        }
+        return lines;
     }
 
     private CreatePersonCommand capturedCommand() {

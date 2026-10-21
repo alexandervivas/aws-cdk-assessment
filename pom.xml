@@ -34,6 +34,7 @@
         <mockito.version>5.24.0</mockito.version>
         <archunit.version>1.5.1</archunit.version>
         <testcontainers.version>2.0.5</testcontainers.version>
+        <slf4j.version>2.0.17</slf4j.version>
 
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
@@ -94,6 +95,12 @@
                 <groupId>io.github.cdklabs</groupId>
                 <artifactId>cdknag</artifactId>
                 <version>${cdknag.version}</version>
+            </dependency>
+            <!-- The AWS SDK pulls in slf4j-api 1.7, which cannot bind the SLF4J 2 provider Powertools logging uses. -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.lambda</groupId>

@@ -8,6 +8,7 @@ import com.tikkie.person.application.PersonRepository;
 import com.tikkie.person.application.RequestHash;
 import com.tikkie.person.domain.Person;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.CancellationReason;
@@ -25,6 +28,8 @@ import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest;
 import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 
 public final class DynamoDbPersonRepository implements PersonRepository {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DynamoDbPersonRepository.class);
 
     private static final int MAX_ATTEMPTS = 3;
     private static final long FIRST_BACKOFF_MIN_MILLIS = 20;
@@ -41,31 +46,35 @@ public final class DynamoDbPersonRepository implements PersonRepository {
     private final String personsTable;
     private final String idempotencyKeysTable;
     private final Clock clock;
+    private final Duration budget;
 
     // The caller owns the client and closes it.
-    public DynamoDbPersonRepository(
-            DynamoDbClient client, String personsTable, String idempotencyKeysTable, Clock clock) {
+    public DynamoDbPersonRepository(DynamoDbClient client, String personsTable, String idempotencyKeysTable,
+            Clock clock, Duration budget) {
         this.client = Objects.requireNonNull(client, "client");
         this.personsTable = Objects.requireNonNull(personsTable, "personsTable");
         this.idempotencyKeysTable = Objects.requireNonNull(idempotencyKeysTable, "idempotencyKeysTable");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.budget = Objects.requireNonNull(budget, "budget");
     }
 
     // Branches on the cancellation reasons (index 0 is the person put, 1 the key put). A taken key is resolved
     // from the key item, which carries personId and createdAt, so a replay never reads the Persons table.
     // Transient reasons are retried after a backoff; anything else (ValidationError, a personId collision)
     // would fail again, so it fails at once. A conflicting writer may have stored the key by the time retries
-    // run out, so the key is read once more before giving up. Never log the request: its toString() prints
-    // personal data.
+    // run out, so the key is read once more before giving up. No attempt or key read starts once the budget is
+    // spent. Never log the request: its toString() prints personal data.
     @Override
     public CreateOutcome create(
             Person person, CallerId caller, IdempotencyKey key, RequestHash hash, String correlationId) {
         Instant now = clock.instant();
+        Instant deadline = now.plus(budget);
         TransactWriteItemsRequest request = createRequest(person, caller, key, hash, correlationId, now);
         TransactionCanceledException lastCancellation = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             if (attempt > 1) {
                 backOff(attempt);
+                requireTimeLeft(deadline, lastCancellation);
             }
             try {
                 client.transactWriteItems(request);
@@ -74,15 +83,22 @@ public final class DynamoDbPersonRepository implements PersonRepository {
                 lastCancellation = cancellation;
                 List<String> reasons = reasonCodes(cancellation);
                 if (keyWasTaken(reasons)) {
+                    // A taken key is the normal replay path, not a problem worth a warning.
+                    LOG.debug("Person transaction cancelled on attempt {} with reasons {}", attempt, reasons);
+                    requireTimeLeft(deadline, cancellation);
                     Optional<StoredKey> stored = findLiveKey(caller, key, now);
                     if (stored.isPresent()) {
                         return outcomeFor(stored.get(), person, hash);
                     }
-                } else if (!isTransient(reasons)) {
-                    throw failure(cancellation);
+                } else {
+                    LOG.warn("Person transaction cancelled on attempt {} with reasons {}", attempt, reasons);
+                    if (!isTransient(reasons)) {
+                        throw failure(cancellation);
+                    }
                 }
             }
         }
+        requireTimeLeft(deadline, lastCancellation);
         Optional<StoredKey> stored = findLiveKey(caller, key, now);
         if (stored.isPresent()) {
             return outcomeFor(stored.get(), person, hash);
@@ -167,6 +183,12 @@ public final class DynamoDbPersonRepository implements PersonRepository {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("idempotent create was interrupted", interrupted);
+        }
+    }
+
+    private void requireTimeLeft(Instant deadline, TransactionCanceledException lastCancellation) {
+        if (!clock.instant().isBefore(deadline)) {
+            throw failure(lastCancellation);
         }
     }
 
