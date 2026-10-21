@@ -21,7 +21,7 @@ What each level covers (levels follow `docs/plan.md` §8):
 | Unit | Value objects, canonical request and fingerprint, use case with an in-memory repository, handler mapping, problem details, JSON mapper, telemetry | `service/src/test/.../domain`, `.../application`, `.../adapter/in/api` |
 | Architecture | `domain` has no AWS, Jackson or adapter dependency | `service/src/test/.../ArchitectureTest.java` |
 | Integration | Repository against DynamoDB Local: create, replay, key reuse, concurrent duplicates, mapper | `service/src/test/.../adapter/out/dynamodb` |
-| Infrastructure | Template assertions per construct (storage, function, permissions, API, events), stage and app wiring, snapshots of Dev and Prod | `infra/src/test/...` |
+| Infrastructure | Template assertions per construct (storage, function, permissions, API, events, monitoring, log data protection), stage and app wiring, cdk-nag with zero unacknowledged findings, snapshots of Dev and Prod | `infra/src/test/...` |
 | End-to-end | Planned, see Status | `e2e/` (module exists, tests skipped) |
 | Load | Planned, see Status | none yet |
 

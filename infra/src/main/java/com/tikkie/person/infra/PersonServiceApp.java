@@ -1,14 +1,19 @@
 package com.tikkie.person.infra;
 
+import io.github.cdklabs.cdknag.AwsSolutionsChecks;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.AppProps;
 import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.Validations;
 
 public final class PersonServiceApp {
 
     static final String DEFAULT_REGION = "eu-west-1";
+    private static final String FAIL_SYNTH_ON_VALIDATION_ERRORS = "@aws-cdk/core:failSynthOnValidationErrors";
+    private static final String APP_MODE = "@aws-cdk/core:appMode";
 
     private static final Pattern ACCOUNT_ID = Pattern.compile("^\\d{12}$");
     private static final Pattern REGION_CODE = Pattern.compile("^[a-z]{2,4}(-[a-z]+)+-\\d{1,2}$");
@@ -17,9 +22,25 @@ public final class PersonServiceApp {
     }
 
     public static void main(String[] args) {
-        App app = new App();
+        App app = newApp(Map.of());
         addStages(app, System.getenv());
+        checkAwsSolutions(app);
         app.synth();
+    }
+
+    // The CLI asks the app to leave validation failures to it, then reports only those in the stacks it selected. A
+    // bare `cdk synth` selects none here, because every stack sits in a stage, so the app fails synthesis itself.
+    // In-memory mode puts the findings in the exception, because the JVM never sees what the jsii kernel prints.
+    static App newApp(Map<String, ?> context) {
+        return new App(AppProps.builder()
+                .context(context)
+                .postCliContext(Map.of(FAIL_SYNTH_ON_VALIDATION_ERRORS, true, APP_MODE, "inmemory"))
+                .build());
+    }
+
+    // A policy validation plugin: synthesis fails on any finding not acknowledged where it arises.
+    static void checkAwsSolutions(App app) {
+        Validations.of(app).addPlugins(new AwsSolutionsChecks(app));
     }
 
     static void addStages(App app, Map<String, String> environmentVariables) {

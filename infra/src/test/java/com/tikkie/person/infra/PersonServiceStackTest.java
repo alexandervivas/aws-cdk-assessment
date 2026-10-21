@@ -6,10 +6,12 @@ import com.tikkie.person.infra.constructs.PersonFunction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.assertions.Match;
 import software.amazon.awscdk.assertions.Template;
 
 class PersonServiceStackTest {
@@ -70,6 +72,21 @@ class PersonServiceStackTest {
 
         template.resourceCountIs("AWS::CloudWatch::Alarm", 6);
         template.resourceCountIs("AWS::SNS::Topic", 1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Dev", "Prod"})
+    void masksPersonalDataInTheFunctionAndPipeLogGroups(String stageId) {
+        Template template = Template.fromStack(stack(stageId));
+        String functionLogGroup = (String) valueAt(onlyResourceProperties(template, "AWS::Lambda::Function"),
+                "LoggingConfig", "LogGroup", "Ref");
+        List<?> pipeLogGroupArn = (List<?>) valueAt(onlyResourceProperties(template, "AWS::Pipes::Pipe"),
+                "LogConfiguration", "CloudwatchLogsLogDestination", "LogGroupArn", "Fn::GetAtt");
+
+        Set<String> protectedLogGroups = template.findResources("AWS::Logs::LogGroup", Map.of(
+                "Properties", Map.of("DataProtectionPolicy", Match.anyValue()))).keySet();
+
+        assertThat(protectedLogGroups).containsExactlyInAnyOrder(functionLogGroup, (String) pipeLogGroupArn.get(0));
     }
 
     @ParameterizedTest
@@ -146,6 +163,20 @@ class PersonServiceStackTest {
             arns.addAll((List<Object>) role.getOrDefault("ManagedPolicyArns", List.of()));
         }
         return arns;
+    }
+
+    private static Map<String, Object> onlyResourceProperties(Template template, String type) {
+        List<Map<String, Object>> properties = resourceProperties(template, type);
+        assertThat(properties).hasSize(1);
+        return properties.get(0);
+    }
+
+    private static Object valueAt(Map<String, Object> properties, String... path) {
+        Object value = properties;
+        for (String key : path) {
+            value = ((Map<?, ?>) value).get(key);
+        }
+        return value;
     }
 
     private static String onlyLogicalId(Template template, String type) {

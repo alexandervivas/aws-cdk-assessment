@@ -1,5 +1,8 @@
 package com.tikkie.person.infra.constructs;
 
+import static com.tikkie.person.infra.constructs.NagAcknowledgements.acknowledge;
+import static com.tikkie.person.infra.constructs.NagAcknowledgements.acknowledgeStageKeyPrefixActions;
+
 import com.tikkie.person.infra.EnvironmentConfig;
 import java.util.Map;
 import software.amazon.awscdk.Duration;
@@ -26,6 +29,7 @@ public final class PersonFunction extends Construct {
     public PersonFunction(Construct scope, String id, EnvironmentConfig config, PersonStorage storage, Code code) {
         super(scope, id);
         LogGroup logGroup = LogGroup.Builder.create(this, "LogGroup")
+                .dataProtectionPolicy(PersonalDataLogProtection.policy())
                 .retention(config.logRetention())
                 .removalPolicy(config.removalPolicy())
                 .build();
@@ -33,6 +37,10 @@ public final class PersonFunction extends Construct {
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
                 .build();
         logGroup.grantWrite(role);
+        acknowledge(role, "AwsSolutions-IAM5[Resource::*]",
+                "ADR 0013: X-Ray PutTraceSegments and PutTelemetryRecords have no resource-level permissions. "
+                        + "The stack IAM walk fails on any other wildcard resource.");
+        acknowledgeStageKeyPrefixActions(role, "ADR 0013: emitted by the table grants, scoped to the stage key.");
         this.function = Function.Builder.create(this, "CreatePerson")
                 .runtime(Runtime.JAVA_25)
                 .architecture(Architecture.ARM_64)

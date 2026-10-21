@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Format: Status, Context, Decision, Consequences, Rejected alternatives. Decisions 0001-0008 come from docs/plan.md §2. Decisions 0009-0014 were taken with the owner during the build and amend the brief (docs/plan.md §13).
+Format: Status, Context, Decision, Consequences, Rejected alternatives. Decisions 0001-0008 come from docs/plan.md §2. Decisions 0009-0015 were taken during the build and amend the brief (docs/plan.md §13).
 
 | ADR | Decision |
 |-----|----------|
@@ -18,3 +18,4 @@ Format: Status, Context, Decision, Consequences, Rejected alternatives. Decision
 | [0012](0012-unsupported-media-type.md) | Non-JSON content types get 415. |
 | [0013](0013-iam-wildcard-exceptions.md) | The few IAM wildcards that cannot be avoided, enforced by a test. |
 | [0014](0014-account-level-apigateway-logging-role.md) | The stack sets the account-level API Gateway logging role. Use a dedicated account. |
+| [0015](0015-cdk-nag-acknowledged-findings.md) | cdk-nag gates synthesis; each acknowledged finding cites an ADR. No WAF, no execution logs. |
