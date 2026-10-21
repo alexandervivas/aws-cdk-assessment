@@ -19,6 +19,15 @@ class CallerIdTest {
     }
 
     @Test
+    void directConstructionAcrossTwoSessionsGivesTheSameCaller() {
+        CallerId firstSession = new CallerId(ROLE + "/session-1");
+        CallerId secondSession = new CallerId(ROLE + "/session-2");
+
+        assertThat(firstSession).isEqualTo(secondSession);
+        assertThat(firstSession.value()).isEqualTo(ROLE);
+    }
+
+    @Test
     void dropsTheSessionNameInAnyPartition() {
         assertThat(CallerId.of("arn:aws-cn:sts::111122223333:assumed-role/client/session-1").value())
                 .isEqualTo("arn:aws-cn:sts::111122223333:assumed-role/client");

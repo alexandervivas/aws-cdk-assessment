@@ -18,15 +18,20 @@ public record CallerId(String value) {
         if (value.indexOf('|') >= 0) {
             throw new IllegalArgumentException("caller id must not contain '|'");
         }
+        value = withoutSessionName(value);
+    }
+
+    public static CallerId of(String principalArn) {
+        if (principalArn == null) {
+            throw new IllegalArgumentException("principal ARN is required");
+        }
+        return new CallerId(principalArn);
     }
 
     // A retry may arrive on a new STS session of the same role, so the session name is not part of the caller.
-    public static CallerId of(String principalArn) {
-        if (principalArn == null || principalArn.isBlank()) {
-            throw new IllegalArgumentException("principal ARN is required");
-        }
+    private static String withoutSessionName(String principalArn) {
         Matcher assumedRole = ASSUMED_ROLE_SESSION.matcher(principalArn);
-        return new CallerId(assumedRole.matches() ? assumedRole.group(1) : principalArn);
+        return assumedRole.matches() ? assumedRole.group(1) : principalArn;
     }
 
     @Override
