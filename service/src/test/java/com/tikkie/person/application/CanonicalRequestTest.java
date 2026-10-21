@@ -84,6 +84,22 @@ class CanonicalRequestTest {
                 .isNotEqualTo(CanonicalRequest.of(empty));
     }
 
+    @Test
+    void rejectsTheSeparatorInADirectlyConstructedComponent() {
+        PersonDetails details = PersonDetails.parse(PERSON);
+        PersonDetails separatorInStreet = withStreetAndHouseNumber(details, "Road\u001FUnit", "7");
+        PersonDetails separatorInHouseNumber = withStreetAndHouseNumber(details, "Road", "Unit\u001F7");
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> CanonicalRequest.of(separatorInStreet))
+                .withMessageNotContaining("Road")
+                .withMessageNotContaining("Unit");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> CanonicalRequest.of(separatorInHouseNumber))
+                .withMessageNotContaining("Road")
+                .withMessageNotContaining("Unit");
+    }
+
     private static CanonicalRequest canonicalOf(UnvalidatedPerson person) {
         return CanonicalRequest.of(PersonDetails.parse(person));
     }
@@ -91,6 +107,13 @@ class CanonicalRequestTest {
     private static PersonDetails withAddition(PersonDetails details, Optional<Sensitive<String>> addition) {
         Address a = details.address();
         Address address = new Address(a.street(), a.houseNumber(), addition, a.postalCode(), a.city(), a.countryCode());
+        return new PersonDetails(details.firstName(), details.lastName(), details.phoneNumber(), address);
+    }
+
+    private static PersonDetails withStreetAndHouseNumber(PersonDetails details, String street, String houseNumber) {
+        Address a = details.address();
+        Address address = new Address(Sensitive.of(street), Sensitive.of(houseNumber), a.houseNumberAddition(),
+                a.postalCode(), a.city(), a.countryCode());
         return new PersonDetails(details.firstName(), details.lastName(), details.phoneNumber(), address);
     }
 }
