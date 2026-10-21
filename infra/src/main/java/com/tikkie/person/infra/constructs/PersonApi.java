@@ -80,10 +80,11 @@ public final class PersonApi extends Construct {
                 .contentType(PersonRequestModel.CONTENT_TYPE)
                 .schema(PersonRequestModel.schema())
                 .build());
-        RequestValidator validator = api.addRequestValidator("BodyAndParameters", RequestValidatorOptions.builder()
+        // Idempotency-Key presence is checked by the handler alone: it matches the header name case-insensitively and
+        // answers with problem details, so the gateway declares no required parameters.
+        RequestValidator validator = api.addRequestValidator("Body", RequestValidatorOptions.builder()
                 .validateRequestBody(true)
-                // Without parameter validation API Gateway would accept a request missing the Idempotency-Key header.
-                .validateRequestParameters(true)
+                .validateRequestParameters(false)
                 .build());
         LambdaIntegration integration = LambdaIntegration.Builder.create(handler)
                 // The console's test invoke would need a second Lambda permission, outside IAM auth and the stage.
@@ -94,7 +95,6 @@ public final class PersonApi extends Construct {
                 .authorizationType(AuthorizationType.IAM)
                 .requestValidator(validator)
                 .requestModels(Map.of(PersonRequestModel.CONTENT_TYPE, requestModel))
-                .requestParameters(Map.of("method.request.header.Idempotency-Key", true))
                 .build());
     }
 }
