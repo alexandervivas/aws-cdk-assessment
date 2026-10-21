@@ -96,7 +96,7 @@ class PersonEventsTest {
                         "BatchSize", 1,
                         "ParallelizationFactor", 10,
                         "MaximumRetryAttempts", 10,
-                        "MaximumRecordAgeInSeconds", -1,
+                        "MaximumRecordAgeInSeconds", 21_600,
                         "DeadLetterConfig", Map.of("Arn", arnOf(onlyLogicalId(template, QUEUE)))))));
     }
 

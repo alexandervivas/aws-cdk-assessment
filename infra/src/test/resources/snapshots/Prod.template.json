@@ -340,7 +340,7 @@
                 "Fn::GetAtt" : [ "EventsDeadLetterQueueC3DB07E1", "Arn" ]
               }
             },
-            "MaximumRecordAgeInSeconds" : -1,
+            "MaximumRecordAgeInSeconds" : 21600,
             "MaximumRetryAttempts" : 10,
             "ParallelizationFactor" : 10,
             "StartingPosition" : "LATEST"

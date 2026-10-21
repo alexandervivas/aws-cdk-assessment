@@ -51,8 +51,10 @@ public final class PersonEvents extends Construct {
     // Ten concurrent batches per shard keep up, and ordering is only kept per person, which is all one
     // PersonCreated per person needs.
     static final int PARALLELIZATION_FACTOR = 10;
-    // No age limit: a record is retried until it succeeds or is dead-lettered, bounded by the 24 h stream retention.
-    static final int MAXIMUM_RECORD_AGE_SECONDS = -1;
+    // A record still failing after 6 h is dead-lettered while the stream keeps it for another 18 h, so the DLQ
+    // metadata can still be used to re-read it. Without a limit, service errors that don't consume retry attempts
+    // could hold a record until the 24 h stream retention drops it unrecoverably.
+    static final int MAXIMUM_RECORD_AGE_SECONDS = 6 * 60 * 60;
     static final String LOG_LEVEL = "ERROR";
 
     private final EventBus bus;
