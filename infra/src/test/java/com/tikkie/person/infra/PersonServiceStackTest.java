@@ -2,6 +2,8 @@ package com.tikkie.person.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikkie.person.infra.constructs.PersonFunction;
 import java.util.ArrayList;
 import java.util.List;
@@ -183,6 +185,49 @@ class PersonServiceStackTest {
         Map<String, Map<String, Object>> resources = template.findResources(type);
         assertThat(resources).hasSize(1);
         return resources.keySet().iterator().next();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Dev", "Prod"})
+    void synthesisesTheSameTemplateTextTwice(String stageId) throws JsonProcessingException {
+        ObjectMapper json = new ObjectMapper();
+
+        assertThat(json.writeValueAsString(Template.fromStack(stack(stageId)).toJSON()))
+                .isEqualTo(json.writeValueAsString(Template.fromStack(stack(stageId)).toJSON()));
+    }
+
+    // Two synths in one JVM agree even with Map.of, whose iteration order only changes from one JVM to the next.
+    // Sorted condition blocks are what keep the template text the same across runs.
+    @ParameterizedTest
+    @ValueSource(strings = {"Dev", "Prod"})
+    void listsEveryPolicyConditionInSortedOrder(String stageId) {
+        List<String> unsorted = new ArrayList<>();
+        collectUnsortedConditions(Template.fromStack(stack(stageId)).toJSON(), unsorted);
+
+        assertThat(unsorted).isEmpty();
+    }
+
+    private static void collectUnsortedConditions(Object node, List<String> unsorted) {
+        if (node instanceof List<?> list) {
+            list.forEach(element -> collectUnsortedConditions(element, unsorted));
+        } else if (node instanceof Map<?, ?> map) {
+            if (map.get("Condition") instanceof Map<?, ?> condition) {
+                addIfUnsorted(condition, unsorted);
+                condition.values().forEach(keys -> {
+                    if (keys instanceof Map<?, ?> keyMap) {
+                        addIfUnsorted(keyMap, unsorted);
+                    }
+                });
+            }
+            map.values().forEach(value -> collectUnsortedConditions(value, unsorted));
+        }
+    }
+
+    private static void addIfUnsorted(Map<?, ?> map, List<String> unsorted) {
+        List<String> keys = map.keySet().stream().map(String::valueOf).toList();
+        if (!keys.equals(keys.stream().sorted().toList())) {
+            unsorted.add(String.join(", ", keys));
+        }
     }
 
     private static PersonServiceStack stack(String stageId) {

@@ -6,6 +6,7 @@ import static com.tikkie.person.infra.constructs.NagAcknowledgements.acknowledge
 import com.tikkie.person.infra.EnvironmentConfig;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import software.amazon.awscdk.ArnComponents;
 import software.amazon.awscdk.ArnFormat;
 import software.amazon.awscdk.Aws;
@@ -128,9 +129,10 @@ public final class PersonEvents extends Construct {
                 .arnFormat(ArnFormat.SLASH_RESOURCE_NAME)
                 .build());
         return new ServicePrincipal("pipes.amazonaws.com", ServicePrincipalOpts.builder()
-                .conditions(Map.of(
+                // Sorted, because Map.of iteration order changes per JVM and would make the template text unstable.
+                .conditions(new TreeMap<>(Map.of(
                         "StringEquals", Map.of("aws:SourceAccount", Aws.ACCOUNT_ID),
-                        "ArnLike", Map.of("aws:SourceArn", pipesOfThisRegion)))
+                        "ArnLike", Map.of("aws:SourceArn", pipesOfThisRegion))))
                 .build());
     }
 
