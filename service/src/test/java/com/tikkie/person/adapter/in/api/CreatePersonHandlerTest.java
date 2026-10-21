@@ -453,6 +453,30 @@ class CreatePersonHandlerTest {
                 .contains("java.lang.IllegalStateException").doesNotContain("flush failed");
     }
 
+    // The cause chain is walked while the ERROR line is built, so this exception makes that log call throw.
+    @Test
+    @ResourceLock(Resources.SYSTEM_OUT)
+    void aFailingErrorLogStillReturnsThe500() throws Exception {
+        when(useCase.create(any())).thenThrow(new UnreadableCauseException());
+
+        APIGatewayProxyResponseEvent response = StandardOutput.capture(() -> handle(post(BODY))).result();
+
+        assertProblem(response, 500, "/problems/internal-error");
+        assertThat(response.getHeaders()).containsEntry("X-Correlation-Id", "req-123");
+    }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_OUT)
+    void aFailingMetricOnThe500PathStillReturnsThe500() throws Exception {
+        when(useCase.create(any())).thenThrow(new IllegalStateException("boom"));
+        doThrow(new IllegalStateException("flush failed")).when(metrics).flush();
+
+        APIGatewayProxyResponseEvent response = StandardOutput.capture(() -> handle(post(BODY))).result();
+
+        assertProblem(response, 500, "/problems/internal-error");
+        assertThat(response.getHeaders()).containsEntry("X-Correlation-Id", "req-123");
+    }
+
     @Test
     void unexpectedFailureMarksTheSubsegmentAsAFaultWithoutItsMessage() {
         when(useCase.create(any())).thenThrow(new IllegalStateException("boom: Anna"));
@@ -591,5 +615,12 @@ class CreatePersonHandlerTest {
     }
 
     private record FieldErrorView(String field, String code, String message) {
+    }
+
+    private static final class UnreadableCauseException extends RuntimeException {
+        @Override
+        public synchronized Throwable getCause() {
+            throw new IllegalStateException("cause unavailable");
+        }
     }
 }

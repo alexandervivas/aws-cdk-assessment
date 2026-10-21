@@ -129,9 +129,9 @@ public final class CreatePersonHandler
     // Class names only: messages from below the handler can quote the input, and the JSON layout would
     // print the message and stack trace of an attached exception.
     private static Handled failed(RuntimeException e, CorrelationId correlationId) {
-        LOG.error("Create person failed",
+        Telemetry.bestEffort(() -> LOG.error("Create person failed",
                 StructuredArguments.entry("correlationId", correlationId.value()),
-                StructuredArguments.entry("exception", classNames(e)));
+                StructuredArguments.entry("exception", classNames(e))));
         return rejected(ProblemDetails.internalError(correlationId), Outcome.ERROR);
     }
 
@@ -148,9 +148,8 @@ public final class CreatePersonHandler
         return new Handled(problem(problem), outcome, problem.correlationId(), null);
     }
 
-    // The response is already built, so a logging or metrics failure must not turn it into an error.
     private void observe(Handled handled) {
-        try {
+        Telemetry.bestEffort(() -> {
             Map<String, String> fields = new LinkedHashMap<>();
             fields.put("correlationId", handled.correlationId());
             fields.put("outcome", handled.outcome().label());
@@ -162,17 +161,7 @@ public final class CreatePersonHandler
                 metrics.addMetric(name, 1, MetricUnit.COUNT);
                 metrics.flush();
             });
-        } catch (RuntimeException e) {
-            reportTelemetryFailure(e);
-        }
-    }
-
-    private static void reportTelemetryFailure(RuntimeException e) {
-        try {
-            LOG.warn("Telemetry failed", StructuredArguments.entry("exception", e.getClass().getName()));
-        } catch (RuntimeException ignored) {
-            // Logging itself is broken, so there is nowhere left to report it.
-        }
+        });
     }
 
     private static void requireJsonContentType(APIGatewayProxyRequestEvent request) {
