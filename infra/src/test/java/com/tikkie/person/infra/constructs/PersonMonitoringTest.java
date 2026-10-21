@@ -137,7 +137,7 @@ class PersonMonitoringTest {
 
     @ParameterizedTest
     @MethodSource(STAGES)
-    void letsCloudWatchUseTheStageKeyOnlyThroughSnsInThisAccount(EnvironmentConfig config) {
+    void letsCloudWatchUseTheStageKeyWithAwsDocumentedStatement(EnvironmentConfig config) {
         Template template = synth(config);
 
         template.hasResourceProperties("AWS::KMS::Key", Map.of("KeyPolicy", Map.of("Statement", Match.arrayWith(List.of(
@@ -145,11 +145,7 @@ class PersonMonitoringTest {
                         "Effect", "Allow",
                         "Principal", Map.of("Service", "cloudwatch.amazonaws.com"),
                         "Action", List.of("kms:Decrypt", "kms:GenerateDataKey*"),
-                        "Resource", "*",
-                        "Condition", Map.of("StringEquals", Map.of(
-                                "kms:ViaService", Map.of("Fn::Join", List.of("", List.of(
-                                        "sns.", Map.of("Ref", "AWS::Region"), ".amazonaws.com"))),
-                                "aws:SourceAccount", Map.of("Ref", "AWS::AccountId"))))))))));
+                        "Resource", "*")))))));
     }
 
     @ParameterizedTest
