@@ -14,7 +14,7 @@ Update this section when a phase lands.
 | 5a | Event bus, archive, Pipe, dead-letter queue | Built |
 | 5b | Event JSON Schema at `docs/events/person-created.v1.json`, contract test | Built |
 | 6 | Monitoring alarms and SNS topic, cdk-nag with justified suppressions, CloudWatch Logs data protection policy | Built |
-| 7 | End-to-end module with a test-only rule and queue, k6 load script | 7a built (`E2eSupportStack`) |
+| 7 | End-to-end module with a test-only rule and queue, k6 load script | Built |
 
 The alarms and the cdk-nag gate are described in [operations](operations.md#alarms) and [cdk-nag acknowledgements](operations.md#cdk-nag-acknowledgements), the log data protection policy in [risks and privacy](risks-and-privacy.md#privacy-and-pii).
 
