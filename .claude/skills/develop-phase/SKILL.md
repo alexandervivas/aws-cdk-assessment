@@ -49,7 +49,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 | 4b | `p4b-storage` | `PersonStorage`: CMK with rotation, Persons (stream `NEW_IMAGE`) and IdempotencyKeys (TTL) `TableV2`s, PITR/retention per stage | yes |
 | 4c | `p4c-lambda` | `PersonFunction`: Java 25 arm64 SnapStart behind alias `live`, explicit role without managed policies, own log group, least-privilege grants; ADR 0013 | yes |
 | 4d | `p4d-request-model` | `PersonRequestModel`: draft-04 JSON Schema (§5.3 layer 1), sorted for stable deployment ids | yes |
-| 4e | `p4e-rest-api` | `PersonApi`: IAM auth, validator, `Idempotency-Key` required, throttling (burst ≤ reserved concurrency), body-free access logs, X-Ray, alias integration, stage-named API, stack-level IAM walk, snapshot test, CI synth; ADR 0014 | yes |
+| 4e | `p4e-rest-api` | `PersonApi`: IAM auth, validator, body validation (the handler enforces `Idempotency-Key`), throttling (burst ≤ reserved concurrency), body-free access logs, X-Ray, alias integration, stage-named API, stack-level IAM walk, snapshot test, CI synth; ADR 0014 | yes |
 | 5a | `p5a-event-bus-and-pipe` | `PersonEvents`: bus, archive, KMS SQS DLQ, `CfnPipe` (INSERT filter, `LATEST`, 10 retries) with grant-built role + tests | yes |
 | 5b | `p5b-event-contract` | Pipe input template as a testable class, `docs/events/person-created.v1.json`, template applied to a sample stream record, validated, PII-free | yes |
 | 6a | `p6a-monitoring` | `PersonMonitoring`: SNS topic, alarms (Lambda errors, API 5XX, DLQ visible > 0, Pipe failures) + tests | yes |
@@ -64,7 +64,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 - **Powertools programmatic** (logging-log4j, metrics, tracing). No AspectJ, no idempotency module.
 - **SDK HTTP client:** `url-connection-client`; clients built at class init so SnapStart snapshots them.
 - **`houseNumberAddition` is the only optional field.**
-- **`Idempotency-Key` must be a UUID.** Presence: API Gateway validator. Format: handler → 400 problem details.
+- **`Idempotency-Key` must be a UUID.** Presence and format: the handler only (case-insensitive header lookup, 400 problem details). API Gateway does not require the header, because REST API required-header matching may be case-sensitive (review of PR #24, 2026-10-21).
 - **Request fingerprint** is computed over canonical normalised domain values in a fixed field order. Whitespace-only differences replay; semantic differences → 422.
 - **Account-level API Gateway logging role** (ADR 0014): accepted side effect for the assessment; deploy only into a dedicated account; centralise it if the project moves forward.
 - **IAM wildcard exceptions** (ADR 0013): X-Ray write actions on `*`, the function's own log-group ARN (`:*` stream suffix), and KMS `ReEncrypt*`/`GenerateDataKey*` on the stage key. Any other wildcard fails the build.
