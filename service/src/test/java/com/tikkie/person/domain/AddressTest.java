@@ -6,6 +6,8 @@ import static org.assertj.core.groups.Tuple.tuple;
 
 import com.tikkie.person.domain.UnvalidatedPerson.UnvalidatedAddress;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class AddressTest {
 
@@ -22,6 +24,48 @@ class AddressTest {
                                 tuple("address.houseNumber", "invalid_characters"),
                                 tuple("address.houseNumberAddition", "invalid_characters"),
                                 tuple("address.city", "invalid_characters")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Damrak\uD800",
+            "\uDC00Damrak",
+            "Dam\u200Brak",
+            "Damrak\u200B",
+            "Dam\u200Drak",
+            "\uFEFFDamrak",
+            "Dam\u00ADrak",
+            "Dam\u202Erak",
+            "Dam\u2028rak",
+            "Dam\u2029rak"})
+    void rejectsSurrogatesFormatAndLineSeparatorCharactersInFreeText(String street) {
+        UnvalidatedAddress invisible =
+                new UnvalidatedAddress(street, "1", null, "SW1A 1AA", "London", "GB");
+
+        assertThatThrownBy(() -> Address.parse(invisible, CountryCode.parse("address.countryCode", "GB")))
+                .isInstanceOfSatisfying(ValidationException.class, e -> assertThat(e.errors())
+                        .extracting(FieldError::field, FieldError::code)
+                        .containsExactly(tuple("address.street", "invalid_characters")));
+    }
+
+    @Test
+    void rejectsFormatCharactersInForeignPostalCode() {
+        UnvalidatedAddress invisible =
+                new UnvalidatedAddress("Main Street", "1", null, "SW1A\u200B1AA", "London", "GB");
+
+        assertThatThrownBy(() -> Address.parse(invisible, CountryCode.parse("address.countryCode", "GB")))
+                .isInstanceOfSatisfying(ValidationException.class, e -> assertThat(e.errors())
+                        .extracting(FieldError::field, FieldError::code)
+                        .containsExactly(tuple("address.postalCode", "invalid_characters")));
+    }
+
+    @Test
+    void stripsTrailingLineSeparatorBeforeCheckingCharacters() {
+        Address address = Address.parse(new UnvalidatedAddress(
+                "Damrak\u2028", "1", null, "1012 LG", "Amsterdam\u2029", "NL"), CountryCode.NL);
+
+        assertThat(address.street().reveal()).isEqualTo("Damrak");
+        assertThat(address.city().reveal()).isEqualTo("Amsterdam");
     }
 
     @Test
