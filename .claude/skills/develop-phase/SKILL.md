@@ -66,7 +66,9 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 - **Idempotency keys are scoped per caller** (IAM principal, STS session name stripped); key table partition key value is `<callerId>|<idempotencyKey>`. Owner decision, 2026-10-21.
 - **Request fingerprint: SHA-256 behind the `RequestFingerprinter` port for the MVP.** A KMS HMAC was rejected for cost, latency and an extra failure point per request; it is a roadmap item and a one-class swap. Canonical form `v1` + `\u001F`-joined normalised values. Owner decision, 2026-10-21 (ADR 0010).
 - **Key item stores `personId` and `createdAt`.** Replays never read Persons, so the Lambda keeps write-only access to Persons.
-- **Non-key transaction cancellation** (e.g. `TransactionConflict`): read the key; present → replay/conflict; absent → retry once (2 attempts total); still failing → 500. API contract unchanged. Concurrency test asserts one person item, one key item, same `personId` for both threads.
+- **Cancellation handling branches on reason codes:** key `ConditionalCheckFailed` → consistent GetItem → replay/conflict; `TransactionConflict`/throttling → jittered backoff, 3 attempts total; `ValidationError` or personId collision → fail fast. Failures surface as a value-free exception (reason codes only) → 500.
+- **Deterministic 24 h key window:** `expiresAt <= now` counts as absent; the key put condition allows overwriting an expired key.
+- **`ClientRequestToken` = candidate personId**, so an SDK retry after a lost response reports `Inserted`, not a replay.
 - **`createdAt`** from an injected `Clock` in the use case; `correlationId` travels in the command.
 - **Pipe template test** uses a minimal in-test `<$.path>` substitution, documented as an approximation.
 - **Snapshots** under `infra/src/test/resources/snapshots/`, updated only with `-Dsnapshot.update=true`.
