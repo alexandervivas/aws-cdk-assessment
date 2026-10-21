@@ -283,3 +283,15 @@ Each phase: keep the build green, add tests with the code, one commit (conventio
 - [ ] Template tests cover the items above; ArchUnit test protects the domain.
 - [ ] README explains decisions and trade-offs in a way that maps to the interview conversation.
 
+
+---
+
+## 13. Amendments
+
+Decisions taken with the owner after this brief was written. Each ADR supersedes the parts of this brief it names. The original text above is unchanged.
+
+| ADR | Supersedes | Change |
+|-----|------------|--------|
+| [0009](adr/0009-per-caller-idempotency-scope.md) | §5.4 IdempotencyKeys partition key | Keys are scoped per caller (IAM principal, STS session name stripped). Partition key value is `<callerId>\|<idempotencyKey>`. |
+| [0010](adr/0010-keyed-request-fingerprint.md) | §5.4 `requestHash` | The request fingerprint is an HMAC-SHA256 from a KMS HMAC key (`GenerateMac`), not a plain SHA-256. §6 gains a `kms:GenerateMac`-only grant. |
+| [0011](adr/0011-idempotent-write-semantics.md) | §5.4 create flow | Cancellations branch on reason codes, with backoff and up to 3 attempts. Expired keys count as absent and may be overwritten (key condition `attribute_not_exists(idempotencyKey) OR expiresAt <= :now`). `ClientRequestToken` is the candidate personId. |
