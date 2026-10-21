@@ -11,7 +11,14 @@ public record PersonName(Sensitive<String> value) {
 
     public PersonName {
         Objects.requireNonNull(value, "value");
-        if (!isAllowed(value.reveal())) {
+        String name = value.reveal();
+        if (!name.equals(FreeText.strip(name))) {
+            throw new IllegalArgumentException("name must be trimmed and NFC-normalised");
+        }
+        if (name.codePointCount(0, name.length()) > MAX_NAME) {
+            throw new IllegalArgumentException("name must be at most " + MAX_NAME + " characters");
+        }
+        if (!isAllowed(name)) {
             throw new IllegalArgumentException("name contains characters that are not allowed");
         }
     }

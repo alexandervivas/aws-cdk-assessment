@@ -8,7 +8,6 @@ final class FreeText {
     // Lone surrogates (Cs) would turn into "?" when encoded as UTF-8; format (Cf) and
     // line/paragraph separators (Zl, Zp) are invisible and make equal-looking values differ.
     private static final Pattern DISALLOWED = Pattern.compile("[\\p{Cc}\\p{Cf}\\p{Cs}\\p{Zl}\\p{Zp}]");
-    private static final Pattern EDGE_SPACES = Pattern.compile("^[\\s\\p{Z}]+|[\\s\\p{Z}]+$");
 
     private FreeText() {
     }
@@ -28,8 +27,27 @@ final class FreeText {
     }
 
     // NFC first, so a decomposed "u + combining diaeresis" equals the composed letter.
-    // \p{Z} also strips no-break spaces, which String.strip() keeps. A null input strips to "".
     static String strip(String raw) {
-        return raw == null ? "" : EDGE_SPACES.matcher(Normalizer.normalize(raw, Normalizer.Form.NFC)).replaceAll("");
+        return trim(raw == null ? null : Normalizer.normalize(raw, Normalizer.Form.NFC));
+    }
+
+    // Also trims no-break spaces, which String.strip() keeps. A null input trims to "".
+    static String trim(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        int start = 0;
+        while (start < raw.length() && isEdgeSpace(raw.codePointAt(start))) {
+            start += Character.charCount(raw.codePointAt(start));
+        }
+        int end = raw.length();
+        while (end > start && isEdgeSpace(raw.codePointBefore(end))) {
+            end -= Character.charCount(raw.codePointBefore(end));
+        }
+        return raw.substring(start, end);
+    }
+
+    private static boolean isEdgeSpace(int codePoint) {
+        return Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint);
     }
 }

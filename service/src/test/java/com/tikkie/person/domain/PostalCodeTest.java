@@ -35,6 +35,7 @@ class PostalCodeTest {
             "'1012 ß',                NL, invalid_format",
             "'1012 ıa',               NL, invalid_format",
             "'١٠١٢ LG',               NL, invalid_format",
+            "'1012 \u212AA',           NL, invalid_format",
             "'101\t15',               DE, invalid_characters",
             "'   ',                   NL, required",
             ",                        DE, required",

@@ -19,7 +19,8 @@ public record PostalCode(Sensitive<String> value) {
         if (!CountryCode.NL.equals(country)) {
             return new PostalCode(Sensitive.of(FreeText.parse(field, raw, MAX_POSTAL_CODE)));
         }
-        String code = FreeText.strip(raw);
+        // Trim without NFC: normalising first would turn the Kelvin sign into an ASCII "K".
+        String code = FreeText.trim(raw);
         if (code.isEmpty()) {
             throw ValidationException.of(field, "required", "must not be blank");
         }
