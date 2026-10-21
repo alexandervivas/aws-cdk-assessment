@@ -1,0 +1,10 @@
+{
+  "name": "person-service",
+  "private": true,
+  "scripts": {
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "aws-cdk": "2.1146.0"
+  }
+}
