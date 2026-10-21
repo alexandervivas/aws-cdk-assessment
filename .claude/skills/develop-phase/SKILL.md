@@ -36,9 +36,12 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 | 1b | `p1b-phone-address-person` | `PhoneNumber` (E.164), `PostalCode` (NL normalised), `Address`, `PersonId`, `Person` (masked `toString`), ArchUnit test | no |
 | 1c | `p1c-domain-hardening` | Review hardening for 1a/1b: record invariants, Address.parse, named limits, control chars, NL ASCII postal, phone letters/extensions, PersonId validation, ArchUnit allow-list, missing tests | no |
 | 1d | `p1d-domain-tests` | Tests that didn't fit 1c: one null per record component, over-limit per free-text field, code-point name length | no |
-| 2a | `p2a-idempotency-port` | `IdempotencyKey`, `RequestHash`, `CreatePersonCommand`, `CreatePersonResult`, `PersonRepository` port with sealed `CreateOutcome` (`Inserted`, `ReplayOf`, `Conflict`), `IdempotencyConflictException` + tests | yes |
-| 2b | `p2b-create-person-use-case` | `CreatePersonUseCase`, in-memory fake + use-case tests | yes |
-| 2c | `p2c-dynamodb-repository` | `DynamoDbPersonRepository` with `TransactWriteItems`, TTL 24 h, retry-once on non-key cancellation; Testcontainers: create, replay, conflict, concurrent duplicates | yes |
+| 2a | `p2a-idempotency-port` | `IdempotencyKey`, `CallerId` (per-caller scope), `RequestHash` value type, `CreatePersonCommand`, `CreatePersonResult`, `PersonRepository` port with sealed `CreateOutcome` (`Inserted`, `ReplayOf`, `Conflict`), `IdempotencyConflictException`, ADR 0009 | yes |
+| 2b | `p2b-request-fingerprint` | `CanonicalRequest`, `RequestFingerprinter` port, `Sha256RequestFingerprinter`, ADR 0010 | yes |
+| 2c | `p2c-create-person-use-case` | `CreatePersonUseCase`, in-memory fake + use-case tests | yes |
+| 2d | `p2d-item-mapper` | `PersonItemMapper` (person and key items, 24 h expiry, guarded read-back) | yes |
+| 2e | `p2e-dynamodb-repository` | `DynamoDbPersonRepository`: one `TransactWriteItems`, reason-code retries, deterministic 24 h window, client request token; DynamoDB Local tests; ADR 0011 | yes |
+| 2f | `p2f-concurrent-duplicates` | Concurrency test (convergence to one person) | yes |
 | 3a | `p3a-api-handler` | DTOs, `ProblemDetails` (RFC 9457), `CreatePersonHandler` status mapping, headers, correlation ID, `Idempotency-Key` UUID check | yes |
 | 3b | `p3b-observability` | Powertools logging/metrics/tracing (programmatic, no AspectJ); handler-to-DynamoDB-Local integration test; log output asserted PII-free | yes |
 | 4a | `p4a-stage-and-storage` | `PersonServiceApp`, `EnvironmentConfig`, `PersonServiceStage`, `PersonServiceStack`, `PersonStorage` + template tests | yes |
@@ -60,6 +63,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 - **`houseNumberAddition` is the only optional field.**
 - **`Idempotency-Key` must be a UUID.** Presence: API Gateway validator. Format: handler → 400 problem details.
 - **Request hash** = SHA-256 over canonical normalised domain values, fixed field order. Whitespace-only differences replay; semantic differences → 422.
+- **Idempotency keys are scoped per caller** (IAM principal, STS session name stripped); key table partition key value is `<callerId>|<idempotencyKey>`. Owner decision, 2026-10-21.
 - **Key item stores `personId` and `createdAt`.** Replays never read Persons, so the Lambda keeps write-only access to Persons.
 - **Non-key transaction cancellation** (e.g. `TransactionConflict`): read the key; present → replay/conflict; absent → retry once (2 attempts total); still failing → 500. API contract unchanged. Concurrency test asserts one person item, one key item, same `personId` for both threads.
 - **`createdAt`** from an injected `Clock` in the use case; `correlationId` travels in the command.
@@ -68,6 +72,10 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 - **E2E support** is a separate `E2eSupportStack` behind `-c e2e=true`, never inside `Dev`/`Prod`.
 - **No LocalStack.** The community image does not emulate Pipes or SnapStart.
 - **Packaging:** shade → `service/target/person-service.jar`; CDK `Code.fromAsset` on it; `cdk.json` runs `./mvnw -q -pl infra compile exec:java`. SDK HTTP clients other than url-connection (`apache-client`, `apache5-client`, `netty-nio-client`) are excluded.
+
+## Decision records
+
+Every decision taken with the owner, including those raised through side-agent notes, gets an ADR in `docs/adr/` in the PR that implements it, and a line in "Decisions already made" above. Numbering starts at 0009 (0001–0008 are reserved for the brief's §2 decisions, written in phase 8). Format: Status, Context, Decision, Consequences, Rejected alternatives. Short. Owner rule, 2026-10-21.
 
 ## Agents (definitions in `.claude/agents/`)
 

@@ -1,6 +1,7 @@
 package com.tikkie.person;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
@@ -18,4 +19,10 @@ class ArchitectureTest {
                     "java..",
                     // Phone validity is a domain rule; libphonenumber is a pure library with no I/O or framework.
                     "com.google.i18n.phonenumbers..");
+
+    @ArchTest
+    static final ArchRule applicationIsFreeOfAwsJacksonAndAdapters = noClasses()
+            .that().resideInAPackage("..application..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "software.amazon..", "com.amazonaws..", "com.fasterxml..", "..adapter..");
 }
