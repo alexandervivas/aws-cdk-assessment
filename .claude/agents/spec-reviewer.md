@@ -15,6 +15,7 @@ Check:
 3. **Contract fidelity:** names, status codes, headers, attribute names, event fields, limits and patterns match `docs/plan.md` §5 and the skill's decision list exactly.
 4. **Full slice:** production code has tests in the same PR; `./mvnw -B verify` passes (run it).
 5. **LOC:** hand-written Java added (run the skill's numstat command against the parent). Over ~400 is acceptable only with a stated reason or a split; flag any test, invariant or null check that looks removed to fit.
-6. **Silent design changes:** anything that departs from `docs/plan.md` §2 or the skill's decisions.
+6. **Design docs in sync:** if the PR adds, changes or reverses a decision, the README "Architecture decisions" table, the ADR and (when the brief is superseded) `docs/plan.md` §13 are updated in the same PR. Flag any drift.
+7. **Silent design changes:** anything that departs from `docs/plan.md` §2 or the skill's decisions.
 
 Report findings as a list, each with file:line, what's wrong and what the spec says. Say "spec compliant" if there are none. No praise, no style notes (that's another reviewer's job).

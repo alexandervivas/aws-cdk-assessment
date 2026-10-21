@@ -84,6 +84,8 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 
 ## Decision records
 
+**The README's "Architecture decisions" table is the design at a glance and must never drift (owner rule, 2026-10-21).** Any PR that adds, changes or reverses a decision updates, in that same PR: the README table row, the ADR, and `docs/plan.md` §13 Amendments when the brief is superseded. The spec reviewer checks this on every PR.
+
 Every decision taken with the owner, including those raised through side-agent notes, gets an ADR in `docs/adr/` in the PR that implements it, and a line in "Decisions already made" above. Numbering starts at 0009 (0001–0008 are reserved for the brief's §2 decisions, written in phase 8). Format: Status, Context, Decision, Consequences, Rejected alternatives. Short. Owner rule, 2026-10-21.
 
 ## Agents (definitions in `.claude/agents/`)

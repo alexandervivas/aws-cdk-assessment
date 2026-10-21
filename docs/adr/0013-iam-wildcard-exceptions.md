@@ -24,6 +24,7 @@ The function role keeps exactly these three wildcard forms:
 - Any new wildcard fails the build instead of slipping in.
 - The function role has no AWS managed policies. Log writes are granted on the function's own log group (`logGroup.grantWrite`), not through `AWSLambdaBasicExecutionRole`, whose `logs:*` actions on `*` would be a third, unscoped wildcard.
 - `grant*` methods grant more DynamoDB actions than the service calls. Persons gets `DeleteItem` and `UpdateItem`. The keys table gets stream actions although it has no stream. This is accepted under the brief's rule that permissions come only from `grant*`. Tightening it means hand-written statements, which the brief rules out.
+- The EventBridge Pipe role carries the same KMS prefix forms on the same stage key. They come from `grantStreamRead` and from `Queue.grantSendMessages` on the CMK-encrypted dead-letter queue. The pipe writes only to its own log group, whose ARN carries the same `:*` stream suffix. The stack-level IAM walk applies the same exceptions to every role.
 - A fourth, account-level exception arrives with the REST API: API Gateway's CloudWatch Logs role carries the AWS managed policy `AmazonAPIGatewayPushToCloudWatchLogs`. See [ADR 0014](0014-account-level-apigateway-logging-role.md). A stack-level test allows exactly that one managed policy ARN.
 - cdk-nag's `AwsSolutions-IAM5` findings for these two statements get suppressions that cite this ADR (phase 6).
 
