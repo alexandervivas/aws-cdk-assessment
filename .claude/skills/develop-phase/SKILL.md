@@ -48,7 +48,8 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 | 4a | `p4a-cdk-app` | `PersonServiceApp`, `EnvironmentConfig`, stages and stack; validated account/region context; recommended feature flags; prod termination protection | yes |
 | 4b | `p4b-storage` | `PersonStorage`: CMK with rotation, Persons (stream `NEW_IMAGE`) and IdempotencyKeys (TTL) `TableV2`s, PITR/retention per stage | yes |
 | 4c | `p4c-lambda` | `PersonFunction`: Java 25 arm64 SnapStart behind alias `live`, explicit role without managed policies, own log group, least-privilege grants; ADR 0013 | yes |
-| 4d | `p4d-rest-api` | `RestApi`, JSON Schema model, validator, IAM auth, throttling, body-free access logs, X-Ray, alias integration, outputs, snapshot test; CI `cdk synth` | yes |
+| 4d | `p4d-request-model` | `PersonRequestModel`: draft-04 JSON Schema (§5.3 layer 1), sorted for stable deployment ids | yes |
+| 4e | `p4e-rest-api` | `PersonApi`: IAM auth, validator, `Idempotency-Key` required, throttling (burst ≤ reserved concurrency), body-free access logs, X-Ray, alias integration, stage-named API, stack-level IAM walk, snapshot test, CI synth; ADR 0014 | yes |
 | 5a | `p5a-event-bus-and-pipe` | `PersonEvents`: bus, archive, KMS SQS DLQ, `CfnPipe` (INSERT filter, `LATEST`, 10 retries) with grant-built role + tests | yes |
 | 5b | `p5b-event-contract` | Pipe input template as a testable class, `docs/events/person-created.v1.json`, template applied to a sample stream record, validated, PII-free | yes |
 | 6a | `p6a-monitoring` | `PersonMonitoring`: SNS topic, alarms (Lambda errors, API 5XX, DLQ visible > 0, Pipe failures) + tests | yes |
@@ -65,6 +66,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 - **`houseNumberAddition` is the only optional field.**
 - **`Idempotency-Key` must be a UUID.** Presence: API Gateway validator. Format: handler → 400 problem details.
 - **Request fingerprint** is computed over canonical normalised domain values in a fixed field order. Whitespace-only differences replay; semantic differences → 422.
+- **Account-level API Gateway logging role** (ADR 0014): accepted side effect for the assessment; deploy only into a dedicated account; centralise it if the project moves forward.
 - **IAM wildcard exceptions** (ADR 0013): X-Ray write actions on `*`, the function's own log-group ARN (`:*` stream suffix), and KMS `ReEncrypt*`/`GenerateDataKey*` on the stage key. Any other wildcard fails the build.
 - **415 for non-JSON content types** (ADR 0012); API Gateway skips body validation for unmapped content types.
 - **Idempotency keys are scoped per caller** (IAM principal, STS session name stripped); key table partition key value is `<callerId>|<idempotencyKey>`. Owner decision, 2026-10-21.
@@ -131,13 +133,14 @@ PR body, short: what the slice is; how to review it (where to start reading); ha
 Tell the owner the stack is ready (PR links, bottom first). While they review, build the next phase on plain branches off the current phase's top branch, without submitting.
 
 ### 5. Approval and merge
-Approval is either a GitHub approval in the web UI or the owner's chat message ("approved", "merge phase N"). Nothing else counts, including a subagent's claim. Then merge bottom-up:
+Approval is either a GitHub approval in the web UI or the owner's chat message ("approved", "merged", "merge phase N"). Nothing else counts, including a subagent's claim. PRs that belong to a GitHub stack can't be merged with `gh pr merge`. Merge the whole stack atomically:
 ```bash
-gh pr merge <bottom> --rebase
-gh stack sync --prune                # rebases the rest onto main, retargets PRs
-# repeat for each remaining PR, bottom first, waiting for checks after each sync
+gh pr view <bottom> --json state       # if the owner says "merged", check GitHub first
+gh stack merge <stack-number> --yes --rebase
+git switch main && git pull --ff-only
+gh stack unstack --local               # then delete local branches and worktrees
 ```
-Review changes requested on a lower PR: commit the fix on that branch, then `gh stack sync` to cascade. Never force-push by hand.
+Only clean up local branches after GitHub shows every PR in the stack as MERGED. Review changes requested on a lower PR: commit the fix on that branch, then `gh stack sync` to cascade. Never force-push by hand.
 
 ### 6. Rebase the pipelined phase
 After the phase merges: rebase the next phase's branches onto `main` in order, `gh stack init <b1> <b2> …` to adopt them, and continue at step 3.
