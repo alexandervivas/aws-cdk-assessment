@@ -4,6 +4,7 @@ import com.tikkie.person.infra.EnvironmentConfig;
 import com.tikkie.person.infra.EnvironmentConfig.AlarmThresholds;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import software.amazon.awscdk.Aws;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
@@ -73,10 +74,11 @@ public final class PersonMonitoring extends Construct {
                 .principals(List.of(CLOUDWATCH))
                 .actions(List.of("sns:Publish"))
                 .resources(List.of(alarmTopic.getTopicArn()))
-                .conditions(Map.of(
+                // Sorted, because Map.of iteration order changes per JVM and would make the template text unstable.
+                .conditions(new TreeMap<>(Map.of(
                         "StringEquals", Map.of("aws:SourceAccount", Aws.ACCOUNT_ID),
                         "ArnLike", Map.of("aws:SourceArn",
-                                "arn:" + Aws.PARTITION + ":cloudwatch:" + Aws.REGION + ":" + Aws.ACCOUNT_ID + ":alarm:*")))
+                                "arn:" + Aws.PARTITION + ":cloudwatch:" + Aws.REGION + ":" + Aws.ACCOUNT_ID + ":alarm:*"))))
                 .build());
         // AWS's documented statement, unconditioned on purpose: sources disagree on whether kms:ViaService and
         // aws:SourceAccount reach CloudWatch's KMS request context, and if either is missing every alarm fires but
