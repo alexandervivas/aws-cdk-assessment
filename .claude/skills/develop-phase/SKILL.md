@@ -55,7 +55,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 | 6a | `p6a-monitoring` | `PersonMonitoring`: SNS topic, alarms (Lambda errors, API 5XX, DLQ visible > 0, Pipe failures) + tests | yes |
 | 6b | `p6b-nag-and-log-protection` | Logs data protection policy, cdk-nag `AwsSolutionsChecks`, justified suppressions, zero-nag-error synth test | yes |
 | 7a | `p7a-e2e-and-load` | `e2e` module (profile `e2e`, skipped without env vars), `E2eSupportStack` (`-c e2e=true`), SigV4 POST + queue poll, `load/k6/create-person.js` | yes |
-| 8a | `p8a-docs` | README, ADRs 0001–0008, deployment docs (OIDC, Dev on merge, Prod behind approval) | no |
+| 8a | `p8a-docs` | (Pulled forward into phase 5, PR #28.) Short README plus `docs/*.md`, ADRs 0001–0008 | no |
 | 9 | — | Owner's account: deploy `Dev/*` + `E2eSupportStack`, run `./mvnw verify -Pe2e` and k6, record results | yes |
 
 ## Decisions already made (do not reopen without the owner)
@@ -84,7 +84,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 
 ## Decision records
 
-**The README's "Architecture decisions" table is the design at a glance and must never drift (owner rule, 2026-10-21).** Any PR that adds, changes or reverses a decision updates, in that same PR: the README table row, the ADR, and `docs/plan.md` §13 Amendments when the brief is superseded. The spec reviewer checks this on every PR.
+**`docs/architecture-decisions.md` is the design at a glance and must never drift (owner rule, 2026-10-21).** The README stays short: one-line intro, the architecture diagram and links into `docs/` (owner rule, 2026-10-21); detailed content lives in `docs/*.md`. Any PR that adds, changes or reverses a decision updates, in that same PR: the decisions table row in `docs/architecture-decisions.md` (and the README diagram if the architecture changes), the ADR, and `docs/plan.md` §13 Amendments when the brief is superseded. The spec reviewer checks this on every PR.
 
 Every decision taken with the owner, including those raised through side-agent notes, gets an ADR in `docs/adr/` in the PR that implements it, and a line in "Decisions already made" above. Numbering starts at 0009 (0001–0008 are reserved for the brief's §2 decisions, written in phase 8). Format: Status, Context, Decision, Consequences, Rejected alternatives. Short. Owner rule, 2026-10-21.
 

@@ -16,12 +16,12 @@ The event carries the person's id and metadata only. The Pipe input template (`P
 - `metadata.correlationId`
 - `data.personId`
 
-Source is `tikkie.person-service` and detail-type is `PersonCreated`. A test pins the template and checks that it reads no other field. The JSON Schema for the event is planned at `docs/events/person-created.v1.json` (see the README Status section).
+Source is `tikkie.person-service` and detail-type is `PersonCreated`. A test pins the template and checks that it reads no other field. The JSON Schema for the event is [`docs/events/person-created.v1.json`](../events/person-created.v1.json), pinned by a contract test.
 
 ## Consequences
 
 - PII stays in the Persons table. Erasure there does not need to chase copies.
-- Consumers that need person data must call the service, which has no read endpoint yet (README roadmap).
+- Consumers that need person data must call the service, which has no read endpoint yet ([roadmap](../roadmap.md)).
 - Delivery is at least once, so consumers deduplicate on `eventId`.
 - Adding a field is a new `eventVersion` and a new schema file.
 

@@ -17,7 +17,7 @@ The table write is the only write. The Persons table has a stream with `NEW_IMAG
 ## Consequences
 
 - A committed insert is followed by an event, at least once, while the pipe runs. Consumers must deduplicate on `metadata.eventId`.
-- Two gaps are possible. An insert made before the pipe first reaches RUNNING (it starts at `LATEST`) gets no event. A record that still fails after its retries is dead-lettered and needs manual re-emission (README, operations notes).
+- Two gaps are possible. An insert made before the pipe first reaches RUNNING (it starts at `LATEST`) gets no event. A record that still fails after its retries is dead-lettered and needs manual re-emission ([operations runbook](../operations.md)).
 - Latency from write to event is higher than a direct `PutEvents`, by the stream and Pipe delay.
 - A failing event is visible in the dead-letter queue instead of being lost in the Lambda.
 - `UPDATE` and `REMOVE` records exist in the stream but are filtered out. Adding more event types means new filters and templates.
