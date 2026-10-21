@@ -1,5 +1,6 @@
 package com.tikkie.person.infra;
 
+import java.time.Duration;
 import java.util.Objects;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -15,7 +16,8 @@ public record EnvironmentConfig(
         double apiRateLimit,
         int apiBurstLimit,
         Integer reservedConcurrency,
-        AlarmThresholds alarmThresholds) {
+        AlarmThresholds alarmThresholds,
+        Duration eventArchiveRetention) {
 
     public record AlarmThresholds(int lambdaErrors, int apiServerErrors) {
         public AlarmThresholds {
@@ -30,6 +32,7 @@ public record EnvironmentConfig(
         Objects.requireNonNull(logRetention, "logRetention");
         Objects.requireNonNull(removalPolicy, "removalPolicy");
         Objects.requireNonNull(alarmThresholds, "alarmThresholds");
+        Objects.requireNonNull(eventArchiveRetention, "eventArchiveRetention");
         if (stageName.isBlank() || logLevel.isBlank()) {
             throw new IllegalArgumentException("stageName and logLevel must not be blank");
         }
@@ -38,6 +41,9 @@ public record EnvironmentConfig(
         }
         if (reservedConcurrency != null && reservedConcurrency <= 0) {
             throw new IllegalArgumentException("reservedConcurrency must be positive when set");
+        }
+        if (!isPositiveWholeDays(eventArchiveRetention)) {
+            throw new IllegalArgumentException("eventArchiveRetention must be a positive number of whole days");
         }
         // A burst the function cannot absorb is throttled by Lambda and reaches clients as an API 5XX.
         if (reservedConcurrency != null && apiBurstLimit > reservedConcurrency) {
@@ -57,7 +63,8 @@ public record EnvironmentConfig(
                 10,
                 20,
                 null,
-                new AlarmThresholds(5, 5));
+                new AlarmThresholds(5, 5),
+                Duration.ofDays(7));
     }
 
     public static EnvironmentConfig prod() {
@@ -72,7 +79,12 @@ public record EnvironmentConfig(
                 100,
                 100,
                 100,
-                new AlarmThresholds(1, 1));
+                new AlarmThresholds(1, 1),
+                Duration.ofDays(30));
+    }
+
+    private static boolean isPositiveWholeDays(Duration duration) {
+        return duration.isPositive() && duration.equals(Duration.ofDays(duration.toDays()));
     }
 
     private static void requireNotNegative(int value, String name) {

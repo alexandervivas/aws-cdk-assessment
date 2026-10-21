@@ -1,6 +1,7 @@
 package com.tikkie.person.infra;
 
 import com.tikkie.person.infra.constructs.PersonApi;
+import com.tikkie.person.infra.constructs.PersonEvents;
 import com.tikkie.person.infra.constructs.PersonFunction;
 import com.tikkie.person.infra.constructs.PersonStorage;
 import com.tikkie.person.infra.constructs.ServiceJar;
@@ -12,12 +13,14 @@ public final class PersonServiceStack extends Stack {
 
     private final PersonStorage storage;
     private final PersonFunction function;
+    private final PersonEvents events;
 
     public PersonServiceStack(Construct scope, String id, EnvironmentConfig config) {
         super(scope, id, StackProps.builder().terminationProtection(config.terminationProtection()).build());
         this.storage = new PersonStorage(this, "Storage", config);
         this.function = new PersonFunction(this, "Function", config, storage, ServiceJar.code());
         new PersonApi(this, "Api", config, function.liveAlias());
+        this.events = new PersonEvents(this, "Events", config, storage);
     }
 
     public PersonStorage storage() {
@@ -26,5 +29,9 @@ public final class PersonServiceStack extends Stack {
 
     public PersonFunction function() {
         return function;
+    }
+
+    public PersonEvents events() {
+        return events;
     }
 }

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.tikkie.person.infra.EnvironmentConfig.AlarmThresholds;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -12,6 +13,7 @@ import software.amazon.awscdk.services.logs.RetentionDays;
 class EnvironmentConfigTest {
 
     private static final AlarmThresholds THRESHOLDS = new AlarmThresholds(1, 1);
+    private static final Duration ARCHIVE_RETENTION = Duration.ofDays(7);
 
     @Test
     void devIsDisposable() {
@@ -41,6 +43,28 @@ class EnvironmentConfigTest {
     void prodAllowsMoreTrafficThanDev() {
         assertThat(EnvironmentConfig.prod().apiRateLimit()).isGreaterThan(EnvironmentConfig.dev().apiRateLimit());
         assertThat(EnvironmentConfig.prod().apiBurstLimit()).isGreaterThan(EnvironmentConfig.dev().apiBurstLimit());
+    }
+
+    @Test
+    void devArchivesEventsForAWeekAndProdForThirtyDays() {
+        assertThat(EnvironmentConfig.dev().eventArchiveRetention().toDays()).isEqualTo(7);
+        assertThat(EnvironmentConfig.prod().eventArchiveRetention().toDays()).isEqualTo(30);
+    }
+
+    @Test
+    void rejectsMissingEventArchiveRetention() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> new EnvironmentConfig(
+                        "dev", "INFO", RetentionDays.ONE_WEEK, RemovalPolicy.DESTROY, false, false, false,
+                        10, 20, null, THRESHOLDS, null))
+                .withMessage("eventArchiveRetention");
+    }
+
+    @Test
+    void rejectsAnArchiveRetentionThatIsNotAPositiveNumberOfWholeDays() {
+        assertThatIllegalArgumentException().isThrownBy(() -> archivedFor(Duration.ZERO));
+        assertThatIllegalArgumentException().isThrownBy(() -> archivedFor(Duration.ofDays(-1)));
+        assertThatIllegalArgumentException().isThrownBy(() -> archivedFor(Duration.ofHours(36)));
     }
 
     @Test
@@ -127,12 +151,19 @@ class EnvironmentConfigTest {
     private static EnvironmentConfig config(
             String stageName, String logLevel, RetentionDays logRetention, RemovalPolicy removalPolicy, AlarmThresholds thresholds) {
         return new EnvironmentConfig(
-                stageName, logLevel, logRetention, removalPolicy, false, false, false, 10, 20, null, thresholds);
+                stageName, logLevel, logRetention, removalPolicy, false, false, false, 10, 20, null, thresholds,
+                ARCHIVE_RETENTION);
+    }
+
+    private static EnvironmentConfig archivedFor(Duration eventArchiveRetention) {
+        return new EnvironmentConfig(
+                "dev", "INFO", RetentionDays.ONE_WEEK, RemovalPolicy.DESTROY, false, false, false,
+                10, 20, null, THRESHOLDS, eventArchiveRetention);
     }
 
     private static EnvironmentConfig throttled(double rateLimit, int burstLimit, Integer reservedConcurrency) {
         return new EnvironmentConfig(
                 "dev", "INFO", RetentionDays.ONE_WEEK, RemovalPolicy.DESTROY, false, false, false,
-                rateLimit, burstLimit, reservedConcurrency, THRESHOLDS);
+                rateLimit, burstLimit, reservedConcurrency, THRESHOLDS, ARCHIVE_RETENTION);
     }
 }
