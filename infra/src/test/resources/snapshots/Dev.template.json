@@ -10,6 +10,16 @@
           "Ref" : "ApiRestApiDeploymentStagedevE2B308CE"
         }, "/" ] ]
       }
+    },
+    "EventsBusArnCE195406" : {
+      "Value" : {
+        "Fn::GetAtt" : [ "EventsBus45DE4339", "Arn" ]
+      }
+    },
+    "EventsBusName4CBB84C7" : {
+      "Value" : {
+        "Ref" : "EventsBus45DE4339"
+      }
     }
   },
   "Parameters" : {
@@ -247,6 +257,193 @@
       },
       "Type" : "AWS::ApiGateway::Method"
     },
+    "EventsBus45DE4339" : {
+      "Properties" : {
+        "Name" : "person-events-dev"
+      },
+      "Type" : "AWS::Events::EventBus"
+    },
+    "EventsBusArchive3AC72948" : {
+      "Properties" : {
+        "Description" : "Person Service events",
+        "EventPattern" : {
+          "source" : [ "tikkie.person-service" ]
+        },
+        "KmsKeyIdentifier" : "",
+        "RetentionDays" : 7,
+        "SourceArn" : {
+          "Fn::GetAtt" : [ "EventsBus45DE4339", "Arn" ]
+        }
+      },
+      "Type" : "AWS::Events::Archive"
+    },
+    "EventsDeadLetterQueueC3DB07E1" : {
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "KmsMasterKeyId" : {
+          "Fn::GetAtt" : [ "StorageTablesKey006F3A78", "Arn" ]
+        },
+        "MessageRetentionPeriod" : 1209600
+      },
+      "Type" : "AWS::SQS::Queue",
+      "UpdateReplacePolicy" : "Delete"
+    },
+    "EventsDeadLetterQueuePolicy9753C52F" : {
+      "Properties" : {
+        "PolicyDocument" : {
+          "Statement" : [ {
+            "Action" : "sqs:*",
+            "Condition" : {
+              "Bool" : {
+                "aws:SecureTransport" : "false"
+              }
+            },
+            "Effect" : "Deny",
+            "Principal" : {
+              "AWS" : "*"
+            },
+            "Resource" : {
+              "Fn::GetAtt" : [ "EventsDeadLetterQueueC3DB07E1", "Arn" ]
+            }
+          } ],
+          "Version" : "2012-10-17"
+        },
+        "Queues" : [ {
+          "Ref" : "EventsDeadLetterQueueC3DB07E1"
+        } ]
+      },
+      "Type" : "AWS::SQS::QueuePolicy"
+    },
+    "EventsPersonCreatedPipe286558F8" : {
+      "DependsOn" : [ "EventsPipeRoleDefaultPolicyB7E451DE", "EventsPipeRole3A464140" ],
+      "Properties" : {
+        "Description" : "Publishes PersonCreated for every inserted person",
+        "LogConfiguration" : {
+          "CloudwatchLogsLogDestination" : {
+            "LogGroupArn" : {
+              "Fn::GetAtt" : [ "EventsPipeLogGroup3F55E076", "Arn" ]
+            }
+          },
+          "Level" : "ERROR"
+        },
+        "RoleArn" : {
+          "Fn::GetAtt" : [ "EventsPipeRole3A464140", "Arn" ]
+        },
+        "Source" : {
+          "Fn::GetAtt" : [ "StoragePersons0FDB3F49", "StreamArn" ]
+        },
+        "SourceParameters" : {
+          "DynamoDBStreamParameters" : {
+            "BatchSize" : 1,
+            "DeadLetterConfig" : {
+              "Arn" : {
+                "Fn::GetAtt" : [ "EventsDeadLetterQueueC3DB07E1", "Arn" ]
+              }
+            },
+            "MaximumRecordAgeInSeconds" : -1,
+            "MaximumRetryAttempts" : 10,
+            "ParallelizationFactor" : 10,
+            "StartingPosition" : "LATEST"
+          },
+          "FilterCriteria" : {
+            "Filters" : [ {
+              "Pattern" : "{\"eventName\":[\"INSERT\"]}"
+            } ]
+          }
+        },
+        "Target" : {
+          "Fn::GetAtt" : [ "EventsBus45DE4339", "Arn" ]
+        },
+        "TargetParameters" : {
+          "EventBridgeEventBusParameters" : {
+            "DetailType" : "PersonCreated",
+            "Source" : "tikkie.person-service"
+          },
+          "InputTemplate" : "{\"metadata\":{\"eventId\":<$.eventID>,\"eventVersion\":\"1\",\"occurredAt\":<$.dynamodb.NewImage.createdAt.S>,\"correlationId\":<$.dynamodb.NewImage.correlationId.S>},\"data\":{\"personId\":<$.dynamodb.NewImage.personId.S>}}"
+        }
+      },
+      "Type" : "AWS::Pipes::Pipe"
+    },
+    "EventsPipeLogGroup3F55E076" : {
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "RetentionInDays" : 7
+      },
+      "Type" : "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy" : "Delete"
+    },
+    "EventsPipeRole3A464140" : {
+      "Properties" : {
+        "AssumeRolePolicyDocument" : {
+          "Statement" : [ {
+            "Action" : "sts:AssumeRole",
+            "Condition" : {
+              "ArnLike" : {
+                "aws:SourceArn" : {
+                  "Fn::Join" : [ "", [ "arn:aws:pipes:eu-west-1:", {
+                    "Ref" : "AWS::AccountId"
+                  }, ":pipe/*" ] ]
+                }
+              },
+              "StringEquals" : {
+                "aws:SourceAccount" : {
+                  "Ref" : "AWS::AccountId"
+                }
+              }
+            },
+            "Effect" : "Allow",
+            "Principal" : {
+              "Service" : "pipes.amazonaws.com"
+            }
+          } ],
+          "Version" : "2012-10-17"
+        }
+      },
+      "Type" : "AWS::IAM::Role"
+    },
+    "EventsPipeRoleDefaultPolicyB7E451DE" : {
+      "Properties" : {
+        "PolicyDocument" : {
+          "Statement" : [ {
+            "Action" : [ "dynamodb:DescribeStream", "dynamodb:GetRecords", "dynamodb:GetShardIterator", "dynamodb:ListStreams" ],
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "StoragePersons0FDB3F49", "StreamArn" ]
+            }
+          }, {
+            "Action" : [ "kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey*", "kms:ReEncrypt*" ],
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "StorageTablesKey006F3A78", "Arn" ]
+            }
+          }, {
+            "Action" : "events:PutEvents",
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "EventsBus45DE4339", "Arn" ]
+            }
+          }, {
+            "Action" : [ "sqs:GetQueueAttributes", "sqs:GetQueueUrl", "sqs:SendMessage" ],
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "EventsDeadLetterQueueC3DB07E1", "Arn" ]
+            }
+          }, {
+            "Action" : [ "logs:CreateLogStream", "logs:PutLogEvents" ],
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "EventsPipeLogGroup3F55E076", "Arn" ]
+            }
+          } ],
+          "Version" : "2012-10-17"
+        },
+        "PolicyName" : "EventsPipeRoleDefaultPolicyB7E451DE",
+        "Roles" : [ {
+          "Ref" : "EventsPipeRole3A464140"
+        } ]
+      },
+      "Type" : "AWS::IAM::Policy"
+    },
     "FunctionCreatePerson97C6A7D0" : {
       "DependsOn" : [ "FunctionRoleDefaultPolicy5265322F", "FunctionRole8EE059BE" ],
       "Properties" : {
@@ -452,7 +649,7 @@
     "StorageTablesKey006F3A78" : {
       "DeletionPolicy" : "Delete",
       "Properties" : {
-        "Description" : "Encrypts the Person Service tables",
+        "Description" : "Encrypts the Person Service tables and the event dead-letter queue",
         "EnableKeyRotation" : true,
         "KeyPolicy" : {
           "Statement" : [ {

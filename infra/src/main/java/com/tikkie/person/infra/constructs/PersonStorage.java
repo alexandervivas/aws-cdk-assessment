@@ -21,7 +21,7 @@ public final class PersonStorage extends Construct {
     public PersonStorage(Construct scope, String id, EnvironmentConfig config) {
         super(scope, id);
         this.encryptionKey = Key.Builder.create(this, "TablesKey")
-                .description("Encrypts the Person Service tables")
+                .description("Encrypts the Person Service tables and the event dead-letter queue")
                 .enableKeyRotation(true)
                 .removalPolicy(config.removalPolicy())
                 .build();

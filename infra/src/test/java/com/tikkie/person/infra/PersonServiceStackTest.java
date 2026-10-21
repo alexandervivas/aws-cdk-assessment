@@ -56,6 +56,15 @@ class PersonServiceStackTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"Dev", "Prod"})
+    void wiresTheEventPipelineOnTheStageBusIntoEachStage(String stageId) {
+        Template template = Template.fromStack(stack(stageId));
+
+        template.resourceCountIs("AWS::Pipes::Pipe", 1);
+        template.hasResourceProperties("AWS::Events::EventBus", Map.of("Name", "person-events-" + stageId.toLowerCase()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Dev", "Prod"})
     void allowsIamWildcardsOnlyForTheRecordedExceptions(String stageId) {
         Template template = Template.fromStack(stack(stageId));
         List<Map<String, Object>> statements = policyStatements(template);
