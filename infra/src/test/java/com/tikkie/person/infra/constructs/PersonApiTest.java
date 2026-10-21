@@ -29,7 +29,7 @@ class PersonApiTest {
 
     @ParameterizedTest
     @MethodSource(STAGES)
-    void requiresIamAuthAndAnIdempotencyKeyOnPostPerson(EnvironmentConfig config) {
+    void requiresIamAuthAndAValidatedBodyOnPostPerson(EnvironmentConfig config) {
         Template template = synth(config);
 
         template.resourceCountIs(METHOD, 1);
@@ -37,16 +37,21 @@ class PersonApiTest {
         template.hasResourceProperties(METHOD, Map.of(
                 "HttpMethod", "POST",
                 "AuthorizationType", "AWS_IAM",
-                "RequestParameters", Map.of("method.request.header.Idempotency-Key", true),
                 "RequestValidatorId", Map.of("Ref", onlyLogicalId(template, "AWS::ApiGateway::RequestValidator"))));
     }
 
     @ParameterizedTest
     @MethodSource(STAGES)
-    void validatesBothBodyAndParameters(EnvironmentConfig config) {
+    void leavesTheIdempotencyKeyCheckToTheHandler(EnvironmentConfig config) {
+        synth(config).hasResourceProperties(METHOD, Map.of("RequestParameters", Match.absent()));
+    }
+
+    @ParameterizedTest
+    @MethodSource(STAGES)
+    void validatesTheBodyOnly(EnvironmentConfig config) {
         synth(config).hasResourceProperties("AWS::ApiGateway::RequestValidator", Map.of(
                 "ValidateRequestBody", true,
-                "ValidateRequestParameters", true));
+                "ValidateRequestParameters", false));
     }
 
     @ParameterizedTest

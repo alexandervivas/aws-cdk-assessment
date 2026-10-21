@@ -39,13 +39,13 @@
       "Type" : "AWS::ApiGateway::Account",
       "UpdateReplacePolicy" : "Retain"
     },
-    "ApiRestApiBodyAndParametersC3221713" : {
+    "ApiRestApiBody5E0382E0" : {
       "Properties" : {
         "RestApiId" : {
           "Ref" : "ApiRestApiE35FEAFE"
         },
         "ValidateRequestBody" : true,
-        "ValidateRequestParameters" : true
+        "ValidateRequestParameters" : false
       },
       "Type" : "AWS::ApiGateway::RequestValidator"
     },
@@ -132,8 +132,8 @@
       },
       "Type" : "AWS::ApiGateway::Model"
     },
-    "ApiRestApiDeploymentDC05A82D7d443b030d813a4d9e79f95498e93af6" : {
-      "DependsOn" : [ "ApiRestApiBodyAndParametersC3221713", "ApiRestApiCreatePersonRequestAFE7D1A0", "ApiRestApipersonPOSTFBE6EC75", "ApiRestApiperson1F668F24" ],
+    "ApiRestApiDeploymentDC05A82D7ad7a9f3ed3a3cb3325865d73859961d" : {
+      "DependsOn" : [ "ApiRestApiBody5E0382E0", "ApiRestApiCreatePersonRequestAFE7D1A0", "ApiRestApipersonPOSTFBE6EC75", "ApiRestApiperson1F668F24" ],
       "Metadata" : {
         "aws:cdk:do-not-refactor" : true
       },
@@ -159,7 +159,7 @@
           "Format" : "{\"requestId\":\"$context.requestId\",\"extendedRequestId\":\"$context.extendedRequestId\",\"ip\":\"$context.identity.sourceIp\",\"userArn\":\"$context.identity.userArn\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\",\"integrationLatency\":\"$context.integrationLatency\"}"
         },
         "DeploymentId" : {
-          "Ref" : "ApiRestApiDeploymentDC05A82D7d443b030d813a4d9e79f95498e93af6"
+          "Ref" : "ApiRestApiDeploymentDC05A82D7ad7a9f3ed3a3cb3325865d73859961d"
         },
         "MethodSettings" : [ {
           "DataTraceEnabled" : false,
@@ -235,11 +235,8 @@
             "Ref" : "ApiRestApiCreatePersonRequestAFE7D1A0"
           }
         },
-        "RequestParameters" : {
-          "method.request.header.Idempotency-Key" : true
-        },
         "RequestValidatorId" : {
-          "Ref" : "ApiRestApiBodyAndParametersC3221713"
+          "Ref" : "ApiRestApiBody5E0382E0"
         },
         "ResourceId" : {
           "Ref" : "ApiRestApiperson1F668F24"
