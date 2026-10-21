@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, 2026-10-21. Raised with the owner during review.
+Accepted, 2026-10-21. Raised during review and confirmed by the owner.
 
 ## Context
 
