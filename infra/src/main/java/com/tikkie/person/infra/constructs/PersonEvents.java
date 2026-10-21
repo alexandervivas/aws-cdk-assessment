@@ -59,6 +59,7 @@ public final class PersonEvents extends Construct {
 
     private final EventBus bus;
     private final Queue deadLetterQueue;
+    private final CfnPipe pipe;
 
     public PersonEvents(Construct scope, String id, EnvironmentConfig config, PersonStorage storage) {
         super(scope, id);
@@ -89,11 +90,20 @@ public final class PersonEvents extends Construct {
         bus.grantPutEventsTo(role);
         deadLetterQueue.grantSendMessages(role);
         logGroup.grantWrite(role);
-        CfnPipe pipe = pipe(storage, role, logGroup);
+        this.pipe = pipe(storage, role, logGroup);
         // Pipes checks at creation that its role can read the source, so the role's policy must exist first.
         pipe.getNode().addDependency(role);
         CfnOutput.Builder.create(this, "BusName").value(bus.getEventBusName()).build();
         CfnOutput.Builder.create(this, "BusArn").value(bus.getEventBusArn()).build();
+    }
+
+    public Queue deadLetterQueue() {
+        return deadLetterQueue;
+    }
+
+    // Ref on AWS::Pipes::Pipe returns the pipe name.
+    public String pipeName() {
+        return pipe.getRef();
     }
 
     // Confused-deputy guard: only a pipe in this account and region may assume the role.

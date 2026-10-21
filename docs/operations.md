@@ -12,6 +12,24 @@
 - **Record age.** A record that keeps failing is dead-lettered after 6 h. The stream then still holds it for 18 h, so the runbook's first step applies.
 - **Throughput.** Batch size 1 with `ParallelizationFactor` 10 per stream shard. That keeps up with the prod API rate without reordering a single person's records.
 
+## Alarms
+
+`infra/src/main/java/com/tikkie/person/infra/constructs/PersonMonitoring.java` creates six alarms per stage. Each one evaluates a single five-minute period, treats missing data as not breaching, and notifies one SNS topic. The topic is encrypted with the stage key, accepts only TLS, has no subscriptions committed, and its ARN is a stack output. Only CloudWatch alarms of the same account may publish to it, and CloudWatch may use the stage key only through SNS in that account. Thresholds come from `EnvironmentConfig.alarmThresholds` (dev / prod).
+
+| Alarm | Metric | Fires when | Means |
+|-------|--------|------------|-------|
+| `UnexpectedErrors` | `PersonService` `UnexpectedError`, `Service=person-service-{stage}` | Sum ≥ 5 / 1 | The handler caught a failure and answered 500. |
+| `LambdaErrors` | `AWS/Lambda` `Errors`, `FunctionName` | Sum ≥ 1 / 1 | The function failed where the handler cannot catch it: a timeout, an init failure or a runtime crash. |
+| `ApiServerErrors` | `AWS/ApiGateway` `5XXError`, `ApiName=person-service-{stage}`, `Stage` | Sum ≥ 5 / 1 | Clients got a 5XX, from the handler or from API Gateway itself. |
+| `LambdaThrottles` | `AWS/Lambda` `Throttles`, `FunctionName` | Sum ≥ 1 / 1 | Lambda refused invocations for lack of concurrency; clients saw 5XX. |
+| `PipeFailures` | `AWS/EventBridge/Pipes` `ExecutionFailed`, `PipeName` | Sum ≥ 1 / 1 | Publishing `PersonCreated` failed. The Pipe retries up to 10 times. |
+| `DeadLetters` | `AWS/SQS` `ApproximateNumberOfMessagesVisible`, `QueueName` | Maximum > 0 | A `PersonCreated` gave up after all retries and needs replaying. The message holds its stream position, not the record. |
+
+- The Powertools service name carries the stage, so the `UnexpectedError` metrics of two stages in one account never mix.
+- Overlap is on purpose (defence in depth): one handler 500 triggers both `UnexpectedErrors` and `ApiServerErrors`, and throttles trigger `LambdaThrottles` plus `ApiServerErrors`.
+- `PipeFailures` is a warning, because it may count retried attempts as well as final failures. `DeadLetters` is the actionable alarm.
+- `DeadLetters` stays in ALARM while any message waits in the queue, so new dead letters in that time don't notify again. Drain the queue with the dead-letter queue runbook above to re-arm it.
+
 ## Scaling notes
 
 - Both tables are on-demand, so there is no capacity to plan. A new table's on-demand limits start modest and grow with traffic. Warm throughput for prod is a roadmap item.

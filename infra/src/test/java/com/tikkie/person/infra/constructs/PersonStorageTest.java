@@ -35,6 +35,13 @@ class PersonStorageTest {
 
     @ParameterizedTest
     @MethodSource("stages")
+    void describesEverythingTheKeyEncrypts(EnvironmentConfig config) {
+        synth(config).hasResourceProperties("AWS::KMS::Key", Map.of(
+                "Description", "Encrypts the Person Service tables, the event dead-letter queue and the alarm topic"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("stages")
     void encryptsBothTablesWithThatKey(EnvironmentConfig config) {
         Template template = synth(config);
         String keyId = template.findResources("AWS::KMS::Key").keySet().iterator().next();

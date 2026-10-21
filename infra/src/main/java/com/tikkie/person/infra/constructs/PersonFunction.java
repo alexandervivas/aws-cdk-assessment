@@ -20,6 +20,7 @@ public final class PersonFunction extends Construct {
     public static final String ALIAS_NAME = "live";
     static final String HANDLER = "com.tikkie.person.adapter.in.api.CreatePersonHandler::handleRequest";
 
+    private final Function function;
     private final Alias liveAlias;
 
     public PersonFunction(Construct scope, String id, EnvironmentConfig config, PersonStorage storage, Code code) {
@@ -32,7 +33,7 @@ public final class PersonFunction extends Construct {
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
                 .build();
         logGroup.grantWrite(role);
-        Function function = Function.Builder.create(this, "CreatePerson")
+        this.function = Function.Builder.create(this, "CreatePerson")
                 .runtime(Runtime.JAVA_25)
                 .architecture(Architecture.ARM_64)
                 .memorySize(1024)
@@ -47,7 +48,7 @@ public final class PersonFunction extends Construct {
                 .environment(Map.of(
                         "PERSONS_TABLE", storage.personsTable().getTableName(),
                         "IDEMPOTENCY_KEYS_TABLE", storage.idempotencyKeysTable().getTableName(),
-                        "POWERTOOLS_SERVICE_NAME", "person-service",
+                        "POWERTOOLS_SERVICE_NAME", serviceName(config),
                         "POWERTOOLS_METRICS_NAMESPACE", "PersonService",
                         "POWERTOOLS_LOG_LEVEL", config.logLevel()))
                 .build();
@@ -57,6 +58,16 @@ public final class PersonFunction extends Construct {
                 .aliasName(ALIAS_NAME)
                 .version(function.getCurrentVersion())
                 .build();
+    }
+
+    // Powertools emits it as the Service dimension of every metric. Naming the stage keeps the metrics of two stages
+    // in one account apart.
+    public static String serviceName(EnvironmentConfig config) {
+        return "person-service-" + config.stageName();
+    }
+
+    public Function function() {
+        return function;
     }
 
     public Alias liveAlias() {

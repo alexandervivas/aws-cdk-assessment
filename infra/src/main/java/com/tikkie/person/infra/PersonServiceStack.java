@@ -3,6 +3,7 @@ package com.tikkie.person.infra;
 import com.tikkie.person.infra.constructs.PersonApi;
 import com.tikkie.person.infra.constructs.PersonEvents;
 import com.tikkie.person.infra.constructs.PersonFunction;
+import com.tikkie.person.infra.constructs.PersonMonitoring;
 import com.tikkie.person.infra.constructs.PersonStorage;
 import com.tikkie.person.infra.constructs.ServiceJar;
 import software.amazon.awscdk.Stack;
@@ -19,8 +20,9 @@ public final class PersonServiceStack extends Stack {
         super(scope, id, StackProps.builder().terminationProtection(config.terminationProtection()).build());
         this.storage = new PersonStorage(this, "Storage", config);
         this.function = new PersonFunction(this, "Function", config, storage, ServiceJar.code());
-        new PersonApi(this, "Api", config, function.liveAlias());
+        PersonApi api = new PersonApi(this, "Api", config, function.liveAlias());
         this.events = new PersonEvents(this, "Events", config, storage);
+        new PersonMonitoring(this, "Monitoring", config, storage, function, api, events);
     }
 
     public PersonStorage storage() {

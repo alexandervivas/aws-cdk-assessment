@@ -13,10 +13,10 @@ Update this section when a phase lands.
 | 4 | Storage, function, API, stage and stack | Built |
 | 5a | Event bus, archive, Pipe, dead-letter queue | Built |
 | 5b | Event JSON Schema at `docs/events/person-created.v1.json`, contract test | Built |
-| 6 | Monitoring alarms and SNS topic, cdk-nag with justified suppressions, CloudWatch Logs data protection policy | Planned |
+| 6 | Monitoring alarms and SNS topic, cdk-nag with justified suppressions, CloudWatch Logs data protection policy | 6a built, 6b planned |
 | 7 | End-to-end module with a test-only rule and queue, k6 load script | Planned |
 
-Until phase 6, `EnvironmentConfig.alarmThresholds` is defined but unused, there are no alarms, and the log group has no data protection policy. Privacy relies on the code-level measures above.
+The alarms are built ([operations](operations.md#alarms)). Until 6b, the log groups have no data protection policy and cdk-nag does not run, so privacy relies on the code-level measures in [risks and privacy](risks-and-privacy.md).
 
 ## Next steps
 

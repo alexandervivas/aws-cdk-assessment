@@ -69,7 +69,7 @@ class PersonFunctionTest {
         template.hasResourceProperties(FUNCTION, Map.of("Environment", Map.of("Variables", Map.of(
                 "PERSONS_TABLE", Map.of("Ref", tableId(template, "personId")),
                 "IDEMPOTENCY_KEYS_TABLE", Map.of("Ref", tableId(template, "idempotencyKey")),
-                "POWERTOOLS_SERVICE_NAME", "person-service",
+                "POWERTOOLS_SERVICE_NAME", "person-service-" + config.stageName(),
                 "POWERTOOLS_METRICS_NAMESPACE", "PersonService",
                 "POWERTOOLS_LOG_LEVEL", config.logLevel()))));
     }

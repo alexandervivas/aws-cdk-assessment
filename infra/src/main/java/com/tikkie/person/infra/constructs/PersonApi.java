@@ -15,6 +15,7 @@ import software.amazon.awscdk.services.apigateway.ModelOptions;
 import software.amazon.awscdk.services.apigateway.RequestValidator;
 import software.amazon.awscdk.services.apigateway.RequestValidatorOptions;
 import software.amazon.awscdk.services.apigateway.RestApi;
+import software.amazon.awscdk.services.apigateway.Stage;
 import software.amazon.awscdk.services.apigateway.StageOptions;
 import software.amazon.awscdk.services.lambda.IFunction;
 import software.amazon.awscdk.services.logs.ILogGroup;
@@ -39,6 +40,7 @@ public final class PersonApi extends Construct {
             "integrationLatency":"$context.integrationLatency"}""";
 
     private final LogGroup accessLogGroup;
+    private final RestApi restApi;
 
     public PersonApi(Construct scope, String id, EnvironmentConfig config, IFunction handler) {
         super(scope, id);
@@ -46,12 +48,16 @@ public final class PersonApi extends Construct {
                 .retention(config.logRetention())
                 .removalPolicy(config.removalPolicy())
                 .build();
-        RestApi api = restApi(config, accessLogGroup);
-        addCreatePersonMethod(api, handler);
+        this.restApi = restApi(config, accessLogGroup);
+        addCreatePersonMethod(restApi, handler);
     }
 
     public LogGroup accessLogGroup() {
         return accessLogGroup;
+    }
+
+    public Stage stage() {
+        return restApi.getDeploymentStage();
     }
 
     private RestApi restApi(EnvironmentConfig config, ILogGroup accessLogs) {
