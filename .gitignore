@@ -1,0 +1,10 @@
+target/
+cdk.out/
+node_modules/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+.envrc.local
+docs/superpowers/
+.claude/settings.local.json
