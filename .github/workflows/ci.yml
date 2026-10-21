@@ -28,3 +28,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: ./mvnw -B verify
+      # cdk synth packages service/target/person-service.jar, which the verify step builds.
+      - run: npx cdk synth
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cdk.out
+          # The templates are the review artifact. The asset folders only hold the jar again.
+          path: |
+            cdk.out
+            !cdk.out/asset.*
+          if-no-files-found: error
+          retention-days: 7

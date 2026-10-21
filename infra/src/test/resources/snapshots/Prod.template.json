@@ -1,0 +1,495 @@
+{
+  "Outputs" : {
+    "ApiRestApiEndpoint4DEFB5CC" : {
+      "Value" : {
+        "Fn::Join" : [ "", [ "https://", {
+          "Ref" : "ApiRestApiE35FEAFE"
+        }, ".execute-api.eu-west-1.", {
+          "Ref" : "AWS::URLSuffix"
+        }, "/", {
+          "Ref" : "ApiRestApiDeploymentStageprodE828476C"
+        }, "/" ] ]
+      }
+    }
+  },
+  "Parameters" : {
+    "BootstrapVersion" : {
+      "Default" : "/cdk-bootstrap/hnb659fds/version",
+      "Description" : "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]",
+      "Type" : "AWS::SSM::Parameter::Value<String>"
+    }
+  },
+  "Resources" : {
+    "ApiAccessLogs50B185DB" : {
+      "DeletionPolicy" : "Retain",
+      "Properties" : {
+        "RetentionInDays" : 90
+      },
+      "Type" : "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy" : "Retain"
+    },
+    "ApiRestApiAccount598A1DA6" : {
+      "DeletionPolicy" : "Retain",
+      "DependsOn" : [ "ApiRestApiE35FEAFE" ],
+      "Properties" : {
+        "CloudWatchRoleArn" : {
+          "Fn::GetAtt" : [ "ApiRestApiCloudWatchRoleB7879BFC", "Arn" ]
+        }
+      },
+      "Type" : "AWS::ApiGateway::Account",
+      "UpdateReplacePolicy" : "Retain"
+    },
+    "ApiRestApiBodyAndParametersC3221713" : {
+      "Properties" : {
+        "RestApiId" : {
+          "Ref" : "ApiRestApiE35FEAFE"
+        },
+        "ValidateRequestBody" : true,
+        "ValidateRequestParameters" : true
+      },
+      "Type" : "AWS::ApiGateway::RequestValidator"
+    },
+    "ApiRestApiCloudWatchRoleB7879BFC" : {
+      "DeletionPolicy" : "Retain",
+      "Properties" : {
+        "AssumeRolePolicyDocument" : {
+          "Statement" : [ {
+            "Action" : "sts:AssumeRole",
+            "Effect" : "Allow",
+            "Principal" : {
+              "Service" : "apigateway.amazonaws.com"
+            }
+          } ],
+          "Version" : "2012-10-17"
+        },
+        "ManagedPolicyArns" : [ {
+          "Fn::Join" : [ "", [ "arn:", {
+            "Ref" : "AWS::Partition"
+          }, ":iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs" ] ]
+        } ]
+      },
+      "Type" : "AWS::IAM::Role",
+      "UpdateReplacePolicy" : "Retain"
+    },
+    "ApiRestApiCreatePersonRequestAFE7D1A0" : {
+      "Properties" : {
+        "ContentType" : "application/json",
+        "RestApiId" : {
+          "Ref" : "ApiRestApiE35FEAFE"
+        },
+        "Schema" : {
+          "$schema" : "http://json-schema.org/draft-04/schema#",
+          "additionalProperties" : false,
+          "properties" : {
+            "address" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "city" : {
+                  "maxLength" : 100,
+                  "type" : "string"
+                },
+                "countryCode" : {
+                  "pattern" : "^[A-Z]{2}$",
+                  "type" : "string"
+                },
+                "houseNumber" : {
+                  "maxLength" : 10,
+                  "type" : "string"
+                },
+                "houseNumberAddition" : {
+                  "maxLength" : 10,
+                  "type" : "string"
+                },
+                "postalCode" : {
+                  "maxLength" : 20,
+                  "type" : "string"
+                },
+                "street" : {
+                  "maxLength" : 200,
+                  "type" : "string"
+                }
+              },
+              "required" : [ "street", "houseNumber", "postalCode", "city", "countryCode" ],
+              "type" : "object"
+            },
+            "firstName" : {
+              "maxLength" : 100,
+              "type" : "string"
+            },
+            "lastName" : {
+              "maxLength" : 100,
+              "type" : "string"
+            },
+            "phoneNumber" : {
+              "maxLength" : 32,
+              "type" : "string"
+            }
+          },
+          "required" : [ "firstName", "lastName", "phoneNumber", "address" ],
+          "title" : "CreatePersonRequest",
+          "type" : "object"
+        }
+      },
+      "Type" : "AWS::ApiGateway::Model"
+    },
+    "ApiRestApiDeploymentDC05A82D7d443b030d813a4d9e79f95498e93af6" : {
+      "DependsOn" : [ "ApiRestApiBodyAndParametersC3221713", "ApiRestApiCreatePersonRequestAFE7D1A0", "ApiRestApipersonPOSTFBE6EC75", "ApiRestApiperson1F668F24" ],
+      "Metadata" : {
+        "aws:cdk:do-not-refactor" : true
+      },
+      "Properties" : {
+        "Description" : "Person Service",
+        "RestApiId" : {
+          "Ref" : "ApiRestApiE35FEAFE"
+        }
+      },
+      "Type" : "AWS::ApiGateway::Deployment"
+    },
+    "ApiRestApiDeploymentStageprodE828476C" : {
+      "DependsOn" : [ "ApiRestApiAccount598A1DA6" ],
+      "Properties" : {
+        "AccessLogSetting" : {
+          "DestinationArn" : {
+            "Fn::Join" : [ "", [ "arn:aws:logs:eu-west-1:", {
+              "Ref" : "AWS::AccountId"
+            }, ":log-group:", {
+              "Ref" : "ApiAccessLogs50B185DB"
+            } ] ]
+          },
+          "Format" : "{\"requestId\":\"$context.requestId\",\"extendedRequestId\":\"$context.extendedRequestId\",\"ip\":\"$context.identity.sourceIp\",\"userArn\":\"$context.identity.userArn\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\",\"integrationLatency\":\"$context.integrationLatency\"}"
+        },
+        "DeploymentId" : {
+          "Ref" : "ApiRestApiDeploymentDC05A82D7d443b030d813a4d9e79f95498e93af6"
+        },
+        "MethodSettings" : [ {
+          "DataTraceEnabled" : false,
+          "HttpMethod" : "*",
+          "ResourcePath" : "/*",
+          "ThrottlingBurstLimit" : 100,
+          "ThrottlingRateLimit" : 100
+        } ],
+        "RestApiId" : {
+          "Ref" : "ApiRestApiE35FEAFE"
+        },
+        "StageName" : "prod",
+        "TracingEnabled" : true
+      },
+      "Type" : "AWS::ApiGateway::Stage"
+    },
+    "ApiRestApiE35FEAFE" : {
+      "Properties" : {
+        "Description" : "Person Service",
+        "EndpointConfiguration" : {
+          "Types" : [ "REGIONAL" ]
+        },
+        "Name" : "person-service-prod"
+      },
+      "Type" : "AWS::ApiGateway::RestApi"
+    },
+    "ApiRestApiperson1F668F24" : {
+      "Properties" : {
+        "ParentId" : {
+          "Fn::GetAtt" : [ "ApiRestApiE35FEAFE", "RootResourceId" ]
+        },
+        "PathPart" : "person",
+        "RestApiId" : {
+          "Ref" : "ApiRestApiE35FEAFE"
+        }
+      },
+      "Type" : "AWS::ApiGateway::Resource"
+    },
+    "ApiRestApipersonPOSTApiPermissionProdPersonServiceApiRestApiE4CA1048POSTperson4A3886E9" : {
+      "Properties" : {
+        "Action" : "lambda:InvokeFunction",
+        "FunctionName" : {
+          "Ref" : "FunctionLiveAliasCD9D06BF"
+        },
+        "Principal" : "apigateway.amazonaws.com",
+        "SourceArn" : {
+          "Fn::Join" : [ "", [ "arn:aws:execute-api:eu-west-1:", {
+            "Ref" : "AWS::AccountId"
+          }, ":", {
+            "Ref" : "ApiRestApiE35FEAFE"
+          }, "/", {
+            "Ref" : "ApiRestApiDeploymentStageprodE828476C"
+          }, "/POST/person" ] ]
+        }
+      },
+      "Type" : "AWS::Lambda::Permission"
+    },
+    "ApiRestApipersonPOSTFBE6EC75" : {
+      "Properties" : {
+        "AuthorizationType" : "AWS_IAM",
+        "HttpMethod" : "POST",
+        "Integration" : {
+          "IntegrationHttpMethod" : "POST",
+          "Type" : "AWS_PROXY",
+          "Uri" : {
+            "Fn::Join" : [ "", [ "arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/", {
+              "Ref" : "FunctionLiveAliasCD9D06BF"
+            }, "/invocations" ] ]
+          }
+        },
+        "RequestModels" : {
+          "application/json" : {
+            "Ref" : "ApiRestApiCreatePersonRequestAFE7D1A0"
+          }
+        },
+        "RequestParameters" : {
+          "method.request.header.Idempotency-Key" : true
+        },
+        "RequestValidatorId" : {
+          "Ref" : "ApiRestApiBodyAndParametersC3221713"
+        },
+        "ResourceId" : {
+          "Ref" : "ApiRestApiperson1F668F24"
+        },
+        "RestApiId" : {
+          "Ref" : "ApiRestApiE35FEAFE"
+        }
+      },
+      "Type" : "AWS::ApiGateway::Method"
+    },
+    "FunctionCreatePerson97C6A7D0" : {
+      "DependsOn" : [ "FunctionRoleDefaultPolicy5265322F", "FunctionRole8EE059BE" ],
+      "Properties" : {
+        "Architectures" : [ "arm64" ],
+        "Code" : {
+          "S3Bucket" : {
+            "Fn::Sub" : "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+          },
+          "S3Key" : "ASSET_HASH.jar"
+        },
+        "Environment" : {
+          "Variables" : {
+            "IDEMPOTENCY_KEYS_TABLE" : {
+              "Ref" : "StorageIdempotencyKeys35093AC8"
+            },
+            "PERSONS_TABLE" : {
+              "Ref" : "StoragePersons0FDB3F49"
+            },
+            "POWERTOOLS_LOG_LEVEL" : "INFO",
+            "POWERTOOLS_METRICS_NAMESPACE" : "PersonService",
+            "POWERTOOLS_SERVICE_NAME" : "person-service"
+          }
+        },
+        "Handler" : "com.tikkie.person.adapter.in.api.CreatePersonHandler::handleRequest",
+        "LoggingConfig" : {
+          "LogGroup" : {
+            "Ref" : "FunctionLogGroup55B80E27"
+          }
+        },
+        "MemorySize" : 1024,
+        "ReservedConcurrentExecutions" : 100,
+        "Role" : {
+          "Fn::GetAtt" : [ "FunctionRole8EE059BE", "Arn" ]
+        },
+        "Runtime" : "java25",
+        "SnapStart" : {
+          "ApplyOn" : "PublishedVersions"
+        },
+        "Timeout" : 10,
+        "TracingConfig" : {
+          "Mode" : "Active"
+        }
+      },
+      "Type" : "AWS::Lambda::Function"
+    },
+    "FunctionCreatePersonCurrentVersionHASH" : {
+      "Metadata" : {
+        "aws:cdk:do-not-refactor" : true
+      },
+      "Properties" : {
+        "FunctionName" : {
+          "Ref" : "FunctionCreatePerson97C6A7D0"
+        }
+      },
+      "Type" : "AWS::Lambda::Version"
+    },
+    "FunctionLiveAliasCD9D06BF" : {
+      "Properties" : {
+        "FunctionName" : {
+          "Ref" : "FunctionCreatePerson97C6A7D0"
+        },
+        "FunctionVersion" : {
+          "Fn::GetAtt" : [ "FunctionCreatePersonCurrentVersionHASH", "Version" ]
+        },
+        "Name" : "live"
+      },
+      "Type" : "AWS::Lambda::Alias"
+    },
+    "FunctionLogGroup55B80E27" : {
+      "DeletionPolicy" : "Retain",
+      "Properties" : {
+        "RetentionInDays" : 90
+      },
+      "Type" : "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy" : "Retain"
+    },
+    "FunctionRole8EE059BE" : {
+      "Properties" : {
+        "AssumeRolePolicyDocument" : {
+          "Statement" : [ {
+            "Action" : "sts:AssumeRole",
+            "Effect" : "Allow",
+            "Principal" : {
+              "Service" : "lambda.amazonaws.com"
+            }
+          } ],
+          "Version" : "2012-10-17"
+        }
+      },
+      "Type" : "AWS::IAM::Role"
+    },
+    "FunctionRoleDefaultPolicy5265322F" : {
+      "Properties" : {
+        "PolicyDocument" : {
+          "Statement" : [ {
+            "Action" : [ "logs:CreateLogStream", "logs:PutLogEvents" ],
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "FunctionLogGroup55B80E27", "Arn" ]
+            }
+          }, {
+            "Action" : [ "xray:PutTelemetryRecords", "xray:PutTraceSegments" ],
+            "Effect" : "Allow",
+            "Resource" : "*"
+          }, {
+            "Action" : [ "kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey*", "kms:ReEncrypt*" ],
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "StorageTablesKey006F3A78", "Arn" ]
+            }
+          }, {
+            "Action" : [ "dynamodb:BatchWriteItem", "dynamodb:DeleteItem", "dynamodb:DescribeTable", "dynamodb:PutItem", "dynamodb:UpdateItem" ],
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "StoragePersons0FDB3F49", "Arn" ]
+            }
+          }, {
+            "Action" : [ "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem", "dynamodb:ConditionCheckItem", "dynamodb:DeleteItem", "dynamodb:DescribeTable", "dynamodb:GetItem", "dynamodb:GetRecords", "dynamodb:GetShardIterator", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:UpdateItem" ],
+            "Effect" : "Allow",
+            "Resource" : {
+              "Fn::GetAtt" : [ "StorageIdempotencyKeys35093AC8", "Arn" ]
+            }
+          } ],
+          "Version" : "2012-10-17"
+        },
+        "PolicyName" : "FunctionRoleDefaultPolicy5265322F",
+        "Roles" : [ {
+          "Ref" : "FunctionRole8EE059BE"
+        } ]
+      },
+      "Type" : "AWS::IAM::Policy"
+    },
+    "StorageIdempotencyKeys35093AC8" : {
+      "DeletionPolicy" : "Retain",
+      "Properties" : {
+        "AttributeDefinitions" : [ {
+          "AttributeName" : "idempotencyKey",
+          "AttributeType" : "S"
+        } ],
+        "BillingMode" : "PAY_PER_REQUEST",
+        "KeySchema" : [ {
+          "AttributeName" : "idempotencyKey",
+          "KeyType" : "HASH"
+        } ],
+        "Replicas" : [ {
+          "DeletionProtectionEnabled" : true,
+          "PointInTimeRecoverySpecification" : {
+            "PointInTimeRecoveryEnabled" : true
+          },
+          "Region" : "eu-west-1",
+          "SSESpecification" : {
+            "KMSMasterKeyId" : {
+              "Fn::GetAtt" : [ "StorageTablesKey006F3A78", "Arn" ]
+            }
+          }
+        } ],
+        "SSESpecification" : {
+          "SSEEnabled" : true,
+          "SSEType" : "KMS"
+        },
+        "TimeToLiveSpecification" : {
+          "AttributeName" : "expiresAt",
+          "Enabled" : true
+        }
+      },
+      "Type" : "AWS::DynamoDB::GlobalTable",
+      "UpdateReplacePolicy" : "Retain"
+    },
+    "StoragePersons0FDB3F49" : {
+      "DeletionPolicy" : "Retain",
+      "Properties" : {
+        "AttributeDefinitions" : [ {
+          "AttributeName" : "personId",
+          "AttributeType" : "S"
+        } ],
+        "BillingMode" : "PAY_PER_REQUEST",
+        "KeySchema" : [ {
+          "AttributeName" : "personId",
+          "KeyType" : "HASH"
+        } ],
+        "Replicas" : [ {
+          "DeletionProtectionEnabled" : true,
+          "PointInTimeRecoverySpecification" : {
+            "PointInTimeRecoveryEnabled" : true
+          },
+          "Region" : "eu-west-1",
+          "SSESpecification" : {
+            "KMSMasterKeyId" : {
+              "Fn::GetAtt" : [ "StorageTablesKey006F3A78", "Arn" ]
+            }
+          }
+        } ],
+        "SSESpecification" : {
+          "SSEEnabled" : true,
+          "SSEType" : "KMS"
+        },
+        "StreamSpecification" : {
+          "StreamViewType" : "NEW_IMAGE"
+        }
+      },
+      "Type" : "AWS::DynamoDB::GlobalTable",
+      "UpdateReplacePolicy" : "Retain"
+    },
+    "StorageTablesKey006F3A78" : {
+      "DeletionPolicy" : "Retain",
+      "Properties" : {
+        "Description" : "Encrypts the Person Service tables",
+        "EnableKeyRotation" : true,
+        "KeyPolicy" : {
+          "Statement" : [ {
+            "Action" : "kms:*",
+            "Effect" : "Allow",
+            "Principal" : {
+              "AWS" : {
+                "Fn::Join" : [ "", [ "arn:aws:iam::", {
+                  "Ref" : "AWS::AccountId"
+                }, ":root" ] ]
+              }
+            },
+            "Resource" : "*"
+          } ],
+          "Version" : "2012-10-17"
+        }
+      },
+      "Type" : "AWS::KMS::Key",
+      "UpdateReplacePolicy" : "Retain"
+    }
+  },
+  "Rules" : {
+    "CheckBootstrapVersion" : {
+      "Assertions" : [ {
+        "Assert" : {
+          "Fn::Not" : [ {
+            "Fn::Contains" : [ [ "1", "2", "3", "4", "5" ], {
+              "Ref" : "BootstrapVersion"
+            } ]
+          } ]
+        },
+        "AssertDescription" : "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+      } ]
+    }
+  }
+}
