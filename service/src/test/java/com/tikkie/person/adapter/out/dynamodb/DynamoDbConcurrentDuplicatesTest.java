@@ -10,6 +10,7 @@ import com.tikkie.person.application.IdempotencyKey;
 import com.tikkie.person.application.RequestHash;
 import com.tikkie.person.domain.Person;
 import com.tikkie.person.domain.PersonId;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -27,8 +28,8 @@ class DynamoDbConcurrentDuplicatesTest {
 
     private final DynamoDbClient client = DynamoDbLocal.client();
     private final Tables tables = DynamoDbLocal.createTables(client);
-    private final DynamoDbPersonRepository repository =
-            new DynamoDbPersonRepository(client, tables.persons(), tables.idempotencyKeys(), SamplePeople.CLOCK);
+    private final DynamoDbPersonRepository repository = new DynamoDbPersonRepository(
+            client, tables.persons(), tables.idempotencyKeys(), SamplePeople.CLOCK, Duration.ofSeconds(6));
 
     @AfterEach
     void closeClient() {

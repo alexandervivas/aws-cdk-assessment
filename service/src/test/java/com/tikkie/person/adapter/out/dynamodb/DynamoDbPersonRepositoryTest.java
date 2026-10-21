@@ -6,6 +6,7 @@ import static com.tikkie.person.adapter.out.dynamodb.SamplePeople.hashOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
+import com.tikkie.person.StandardOutput;
 import com.tikkie.person.adapter.out.dynamodb.DynamoDbLocal.Tables;
 import com.tikkie.person.application.CallerId;
 import com.tikkie.person.application.CreateOutcome;
@@ -18,6 +19,7 @@ import java.io.StringWriter;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -27,8 +29,14 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -44,6 +52,7 @@ class DynamoDbPersonRepositoryTest {
 
     private static final IdempotencyKey KEY = IdempotencyKey.parse("0b6f5a3e-8c1d-4e2f-9a7b-3c4d5e6f7a8b");
     private static final Duration KEY_WINDOW = Duration.ofHours(24);
+    private static final Duration BUDGET = Duration.ofSeconds(6);
 
     private static final String NONE = "None";
     private static final String CONDITIONAL_CHECK_FAILED = "ConditionalCheckFailed";
@@ -188,6 +197,56 @@ class DynamoDbPersonRepositoryTest {
         assertThat(client.readTables).containsExactly(tables.idempotencyKeys());
     }
 
+    @Test
+    void noNewAttemptStartsOnceTheBudgetIsSpent() {
+        client.cancelNextWith(NONE, TRANSACTION_CONFLICT);
+        Person person = SamplePeople.person();
+        DynamoDbPersonRepository slow = repositoryAt(advancingEachRead(BUDGET.plusSeconds(1)));
+
+        assertThatIllegalStateException()
+                .isThrownBy(() -> slow.create(person, CALLER, KEY, hashOf(person), "corr-1"))
+                .withMessage("idempotent create failed: [None, TransactionConflict]");
+        assertThat(client.transactions).hasSize(1);
+        assertThat(client.readTables).isEmpty();
+    }
+
+    @Test
+    void noKeyReadStartsOnceTheBudgetIsSpent() {
+        Person original = SamplePeople.person();
+        RequestHash hash = hashOf(original);
+        repository.create(original, CALLER, KEY, hash, "corr-1");
+        client.cancelNextWith(NONE, CONDITIONAL_CHECK_FAILED);
+        DynamoDbPersonRepository slow = repositoryAt(advancingEachRead(BUDGET));
+
+        assertThatIllegalStateException()
+                .isThrownBy(() -> slow.create(SamplePeople.person(), CALLER, KEY, hash, "corr-2"))
+                .withMessage("idempotent create failed: [None, ConditionalCheckFailed]");
+        assertThat(client.readTables).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ConditionalCheckFailed, DEBUG", "TransactionConflict, WARN"})
+    @ResourceLock(Resources.SYSTEM_OUT)
+    void aTakenKeyIsLoggedAtDebugAndATransientReasonAtWarn(String keyPutCode, String level) {
+        Person original = SamplePeople.person();
+        RequestHash hash = hashOf(original);
+        repository.create(original, CALLER, KEY, hash, "corr-1");
+        client.cancelNextWith(NONE, keyPutCode);
+        String logger = DynamoDbPersonRepository.class.getName();
+        Level originalLevel = LogManager.getLogger(logger).getLevel();
+        Configurator.setLevel(logger, Level.DEBUG);
+        String output;
+        try {
+            output = StandardOutput.capture(
+                    () -> repository.create(SamplePeople.person(), CALLER, KEY, hash, "corr-2")).output();
+        } finally {
+            Configurator.setLevel(logger, originalLevel);
+        }
+
+        assertThat(output.lines().filter(line -> line.contains(keyPutCode)).toList())
+                .singleElement().asString().contains("\"level\":\"" + level + "\"");
+    }
+
     @ParameterizedTest
     @CsvSource(value = {"null, null", "None, null"}, nullValues = "null")
     void aMissingReasonCodeFailsFastAsUnknown(String personPutCode, String keyPutCode) {
@@ -324,11 +383,31 @@ class DynamoDbPersonRepositoryTest {
     }
 
     private DynamoDbPersonRepository repositoryAt(Clock clock) {
-        return new DynamoDbPersonRepository(client, tables.persons(), tables.idempotencyKeys(), clock);
+        return new DynamoDbPersonRepository(client, tables.persons(), tables.idempotencyKeys(), clock, BUDGET);
     }
 
     private static Clock clockAt(Instant instant) {
         return Clock.fixed(instant, ZoneOffset.UTC);
+    }
+
+    private static Clock advancingEachRead(Duration step) {
+        AtomicReference<Instant> next = new AtomicReference<>(CREATED_AT);
+        return new Clock() {
+            @Override
+            public Instant instant() {
+                return next.getAndUpdate(instant -> instant.plus(step));
+            }
+
+            @Override
+            public ZoneOffset getZone() {
+                return ZoneOffset.UTC;
+            }
+
+            @Override
+            public Clock withZone(ZoneId zone) {
+                return this;
+            }
+        };
     }
 
     private Map<String, AttributeValue> personItem(PersonId id) {

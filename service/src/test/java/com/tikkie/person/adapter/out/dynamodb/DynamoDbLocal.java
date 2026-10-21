@@ -15,7 +15,7 @@ import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
 import software.amazon.awssdk.services.dynamodb.model.KeyType;
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 
-final class DynamoDbLocal {
+public final class DynamoDbLocal {
 
     private static final int PORT = 8000;
 
@@ -27,13 +27,13 @@ final class DynamoDbLocal {
         CONTAINER.start();
     }
 
-    record Tables(String persons, String idempotencyKeys) {
+    public record Tables(String persons, String idempotencyKeys) {
     }
 
     private DynamoDbLocal() {
     }
 
-    static DynamoDbClient client() {
+    public static DynamoDbClient client() {
         return DynamoDbClient.builder()
                 .endpointOverride(URI.create("http://" + CONTAINER.getHost() + ":" + CONTAINER.getMappedPort(PORT)))
                 .region(Region.EU_WEST_1)
@@ -42,7 +42,7 @@ final class DynamoDbLocal {
                 .build();
     }
 
-    static Tables createTables(DynamoDbClient client) {
+    public static Tables createTables(DynamoDbClient client) {
         String suffix = UUID.randomUUID().toString();
         Tables tables = new Tables("persons-" + suffix, "idempotency-keys-" + suffix);
         createTable(client, tables.persons(), "personId");

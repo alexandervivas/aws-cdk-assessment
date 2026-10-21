@@ -14,13 +14,23 @@ import com.tikkie.person.application.IdempotencyKey;
 import com.tikkie.person.domain.UnvalidatedPerson;
 import com.tikkie.person.domain.ValidationException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import software.amazon.lambda.powertools.logging.PowertoolsLogging;
+import software.amazon.lambda.powertools.logging.argument.StructuredArguments;
+import software.amazon.lambda.powertools.metrics.Metrics;
+import software.amazon.lambda.powertools.metrics.model.MetricUnit;
+import software.amazon.lambda.powertools.tracing.TracingUtils;
 
 public final class CreatePersonHandler
         implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
@@ -30,24 +40,50 @@ public final class CreatePersonHandler
     private static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     private static final String JSON = "application/json";
 
-    private final CreatePersonUseCase useCase;
+    private static final Logger LOG = LoggerFactory.getLogger(CreatePersonHandler.class);
+    private static final String USE_CASE_SUBSEGMENT = "CreatePerson";
+    private static final int MAX_LOGGED_CAUSES = 10;
 
-    public CreatePersonHandler(CreatePersonUseCase useCase) {
-        this.useCase = Objects.requireNonNull(useCase, "useCase");
+    private final CreatePersonUseCase useCase;
+    private final Metrics metrics;
+
+    // The DynamoDB client is built here, at init, so a SnapStart snapshot holds it. Credentials are resolved
+    // on the first call, after restore.
+    public CreatePersonHandler() {
+        this(System::getenv);
     }
 
+    private CreatePersonHandler(Function<String, String> environment) {
+        this(ProductionWiring.useCase(environment, ProductionWiring.dynamoDbClient(environment)),
+                ProductionWiring.metrics(environment));
+    }
+
+    CreatePersonHandler(CreatePersonUseCase useCase, Metrics metrics) {
+        this.useCase = Objects.requireNonNull(useCase, "useCase");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
+    }
+
+    // The cold_start log field means an on-demand init to Powertools, so under SnapStart it is always false.
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
+        return PowertoolsLogging.withLogging(context, () -> {
+            Handled handled = handleSafely(request);
+            observe(handled);
+            return handled.response();
+        });
+    }
+
+    private Handled handleSafely(APIGatewayProxyRequestEvent request) {
         try {
             CorrelationId correlationId =
                     CorrelationId.fromHeader(header(request, CORRELATION_ID_HEADER), UUID::randomUUID);
             return handle(request, correlationId);
         } catch (RuntimeException e) {
-            return problem(ProblemDetails.internalError(new CorrelationId(UUID.randomUUID().toString())));
+            return failed(e, new CorrelationId(UUID.randomUUID().toString()));
         }
     }
 
-    private APIGatewayProxyResponseEvent handle(APIGatewayProxyRequestEvent request, CorrelationId correlationId) {
+    private Handled handle(APIGatewayProxyRequestEvent request, CorrelationId correlationId) {
         try {
             requireJsonContentType(request);
             CreatePersonCommand command = new CreatePersonCommand(
@@ -55,17 +91,87 @@ public final class CreatePersonHandler
                     IdempotencyKey.parse(header(request, IDEMPOTENCY_KEY_HEADER)),
                     readPerson(request),
                     correlationId.value());
-            return created(useCase.create(command), correlationId);
+            CreatePersonResult result = createTraced(command);
+            Outcome outcome = result instanceof CreatePersonResult.Replayed ? Outcome.REPLAYED : Outcome.CREATED;
+            return new Handled(created(result, correlationId), outcome, correlationId.value(),
+                    result.personId().toString());
         } catch (UnsupportedMediaTypeException e) {
-            return problem(ProblemDetails.unsupportedMediaType(correlationId));
+            return rejected(ProblemDetails.unsupportedMediaType(correlationId), Outcome.UNSUPPORTED_MEDIA_TYPE);
         } catch (MalformedRequestException e) {
-            return problem(ProblemDetails.malformedRequest(correlationId));
+            return rejected(ProblemDetails.malformedRequest(correlationId), Outcome.MALFORMED);
         } catch (ValidationException e) {
-            return problem(ProblemDetails.validationError(e.errors(), correlationId));
+            return rejected(ProblemDetails.validationError(e.errors(), correlationId), Outcome.VALIDATION_FAILED);
         } catch (IdempotencyConflictException e) {
-            return problem(ProblemDetails.idempotencyKeyReused(correlationId));
+            return rejected(ProblemDetails.idempotencyKeyReused(correlationId), Outcome.CONFLICT);
         } catch (RuntimeException e) {
-            return problem(ProblemDetails.internalError(correlationId));
+            return failed(e, correlationId);
+        }
+    }
+
+    // Powertools 2.11.0 withSubsegment only takes a Consumer, so the result comes back through a reference.
+    // Only an unexpected failure is a fault. It is marked by class name: addException would record the message.
+    private CreatePersonResult createTraced(CreatePersonCommand command) {
+        AtomicReference<CreatePersonResult> result = new AtomicReference<>();
+        TracingUtils.withSubsegment(USE_CASE_SUBSEGMENT, subsegment -> {
+            try {
+                result.set(useCase.create(command));
+            } catch (ValidationException | IdempotencyConflictException e) {
+                throw e;
+            } catch (RuntimeException e) {
+                subsegment.setFault(true);
+                subsegment.putAnnotation("exception", e.getClass().getName());
+                throw e;
+            }
+        });
+        return result.get();
+    }
+
+    // Class names only: messages from below the handler can quote the input, and the JSON layout would
+    // print the message and stack trace of an attached exception.
+    private static Handled failed(RuntimeException e, CorrelationId correlationId) {
+        LOG.error("Create person failed",
+                StructuredArguments.entry("correlationId", correlationId.value()),
+                StructuredArguments.entry("exception", classNames(e)));
+        return rejected(ProblemDetails.internalError(correlationId), Outcome.ERROR);
+    }
+
+    // Bounded, because a cause chain can loop back on itself.
+    private static List<String> classNames(Throwable e) {
+        List<String> names = new ArrayList<>();
+        for (Throwable cause = e; cause != null && names.size() < MAX_LOGGED_CAUSES; cause = cause.getCause()) {
+            names.add(cause.getClass().getName());
+        }
+        return names;
+    }
+
+    private static Handled rejected(ProblemDetails problem, Outcome outcome) {
+        return new Handled(problem(problem), outcome, problem.correlationId(), null);
+    }
+
+    // The response is already built, so a logging or metrics failure must not turn it into an error.
+    private void observe(Handled handled) {
+        try {
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("correlationId", handled.correlationId());
+            fields.put("outcome", handled.outcome().label());
+            if (handled.personId() != null) {
+                fields.put("personId", handled.personId());
+            }
+            LOG.info("Create person handled", StructuredArguments.entries(fields));
+            handled.outcome().metricName().ifPresent(name -> {
+                metrics.addMetric(name, 1, MetricUnit.COUNT);
+                metrics.flush();
+            });
+        } catch (RuntimeException e) {
+            reportTelemetryFailure(e);
+        }
+    }
+
+    private static void reportTelemetryFailure(RuntimeException e) {
+        try {
+            LOG.warn("Telemetry failed", StructuredArguments.entry("exception", e.getClass().getName()));
+        } catch (RuntimeException ignored) {
+            // Logging itself is broken, so there is nowhere left to report it.
         }
     }
 
@@ -168,6 +274,10 @@ public final class CreatePersonHandler
 
     private static APIGatewayProxyResponseEvent response(int status, Map<String, String> headers, String body) {
         return new APIGatewayProxyResponseEvent().withStatusCode(status).withHeaders(headers).withBody(body);
+    }
+
+    private record Handled(
+            APIGatewayProxyResponseEvent response, Outcome outcome, String correlationId, String personId) {
     }
 
     // Exists only to map an unsupported Content-Type to 415.

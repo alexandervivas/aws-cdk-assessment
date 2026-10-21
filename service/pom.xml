@@ -52,6 +52,10 @@
             <artifactId>libphonenumber</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
             <groupId>software.amazon.lambda</groupId>
             <artifactId>powertools-logging-log4j</artifactId>
         </dependency>
@@ -112,6 +116,13 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>-javaagent:${org.mockito:mockito-core:jar} -Xshare:off</argLine>
+                    <!-- No X-Ray daemon or Lambda runtime in tests: drop the missing-segment noise and
+                         send EMF metrics to stdout instead of probing for a CloudWatch agent. -->
+                    <environmentVariables>
+                        <AWS_XRAY_CONTEXT_MISSING>IGNORE_ERROR</AWS_XRAY_CONTEXT_MISSING>
+                        <AWS_EMF_ENVIRONMENT>Local</AWS_EMF_ENVIRONMENT>
+                        <POWERTOOLS_SERVICE_NAME>person-service</POWERTOOLS_SERVICE_NAME>
+                    </environmentVariables>
                 </configuration>
             </plugin>
             <plugin>
