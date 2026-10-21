@@ -280,6 +280,32 @@ class DynamoDbPersonRepositoryTest {
     }
 
     @Test
+    void aKeyHoldingTheCandidateIdAndHashReportsInserted() {
+        Person person = SamplePeople.person();
+        RequestHash hash = hashOf(person);
+        storeKeyItem(PersonItemMapper.keyItem(CALLER, KEY, hash, person));
+        client.cancelNextWith(NONE, CONDITIONAL_CHECK_FAILED);
+
+        CreateOutcome outcome = repository.create(person, CALLER, KEY, hash, "corr-1");
+
+        assertThat(outcome).isEqualTo(new CreateOutcome.Inserted());
+        assertThat(client.transactions).hasSize(1);
+    }
+
+    @Test
+    void aKeyHoldingTheCandidateIdWithAnotherHashFails() {
+        Person person = SamplePeople.person();
+        RequestHash otherHash = hashOf(SamplePeople.withAddition("III"));
+        storeKeyItem(PersonItemMapper.keyItem(CALLER, KEY, otherHash, person));
+        client.cancelNextWith(NONE, CONDITIONAL_CHECK_FAILED);
+
+        assertThatIllegalStateException()
+                .isThrownBy(() -> repository.create(person, CALLER, KEY, hashOf(person), "corr-1"))
+                .withMessage("idempotency key item does not match its own write");
+        assertThat(client.transactions).hasSize(1);
+    }
+
+    @Test
     void aMalformedKeyItemFailsWithoutReplaying() {
         Person person = SamplePeople.person();
         RequestHash hash = hashOf(person);
@@ -291,6 +317,10 @@ class DynamoDbPersonRepositoryTest {
                 .isThrownBy(() -> repository.create(person, CALLER, KEY, hash, "corr-1"))
                 .withMessage("idempotency key item lacks personId");
         assertThat(itemCount(tables.persons())).isZero();
+    }
+
+    private void storeKeyItem(Map<String, AttributeValue> item) {
+        local.putItem(put -> put.tableName(tables.idempotencyKeys()).item(item));
     }
 
     private DynamoDbPersonRepository repositoryAt(Clock clock) {
