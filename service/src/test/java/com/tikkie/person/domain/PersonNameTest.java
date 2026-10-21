@@ -85,6 +85,20 @@ class PersonNameTest {
         assertThatIllegalArgumentException().isThrownBy(() -> new PersonName(Sensitive.of("Anna1")));
     }
 
+    @ParameterizedTest
+    @MethodSource("nonCanonicalNames")
+    void constructorRejectsValuesParseWouldNeverProduce(String value) {
+        assertThatIllegalArgumentException().isThrownBy(() -> new PersonName(Sensitive.of(value)));
+    }
+
+    static Stream<String> nonCanonicalNames() {
+        return Stream.of(
+                "",
+                "a".repeat(PersonName.MAX_NAME + 1),
+                " Anna",
+                "Mu\u0308ller");
+    }
+
     @Test
     void masksValueInToString() {
         assertThat(PersonName.parse(FIELD, "Anna").toString())
