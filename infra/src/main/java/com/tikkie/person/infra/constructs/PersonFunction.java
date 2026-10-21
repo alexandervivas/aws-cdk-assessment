@@ -1,0 +1,65 @@
+package com.tikkie.person.infra.constructs;
+
+import com.tikkie.person.infra.EnvironmentConfig;
+import java.util.Map;
+import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.lambda.Alias;
+import software.amazon.awscdk.services.lambda.Architecture;
+import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.Function;
+import software.amazon.awscdk.services.lambda.Runtime;
+import software.amazon.awscdk.services.lambda.SnapStartConf;
+import software.amazon.awscdk.services.lambda.Tracing;
+import software.amazon.awscdk.services.logs.LogGroup;
+import software.constructs.Construct;
+
+public final class PersonFunction extends Construct {
+
+    public static final String ALIAS_NAME = "live";
+    static final String HANDLER = "com.tikkie.person.adapter.in.api.CreatePersonHandler::handleRequest";
+
+    private final Alias liveAlias;
+
+    public PersonFunction(Construct scope, String id, EnvironmentConfig config, PersonStorage storage, Code code) {
+        super(scope, id);
+        LogGroup logGroup = LogGroup.Builder.create(this, "LogGroup")
+                .retention(config.logRetention())
+                .removalPolicy(config.removalPolicy())
+                .build();
+        Role role = Role.Builder.create(this, "Role")
+                .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
+                .build();
+        logGroup.grantWrite(role);
+        Function function = Function.Builder.create(this, "CreatePerson")
+                .runtime(Runtime.JAVA_25)
+                .architecture(Architecture.ARM_64)
+                .memorySize(1024)
+                .timeout(Duration.seconds(10))
+                .code(code)
+                .handler(HANDLER)
+                .snapStart(SnapStartConf.ON_PUBLISHED_VERSIONS)
+                .tracing(Tracing.ACTIVE)
+                .role(role)
+                .logGroup(logGroup)
+                .reservedConcurrentExecutions(config.reservedConcurrency())
+                .environment(Map.of(
+                        "PERSONS_TABLE", storage.personsTable().getTableName(),
+                        "IDEMPOTENCY_KEYS_TABLE", storage.idempotencyKeysTable().getTableName(),
+                        "POWERTOOLS_SERVICE_NAME", "person-service",
+                        "POWERTOOLS_METRICS_NAMESPACE", "PersonService",
+                        "POWERTOOLS_LOG_LEVEL", config.logLevel()))
+                .build();
+        storage.personsTable().grantWriteData(function);
+        storage.idempotencyKeysTable().grantReadWriteData(function);
+        this.liveAlias = Alias.Builder.create(this, "LiveAlias")
+                .aliasName(ALIAS_NAME)
+                .version(function.getCurrentVersion())
+                .build();
+    }
+
+    public Alias liveAlias() {
+        return liveAlias;
+    }
+}
