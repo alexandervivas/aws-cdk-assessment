@@ -4,7 +4,7 @@ Status: Accepted, 2026-10-21, decided with the owner.
 
 ## Context
 
-`POST /persons` takes an `Idempotency-Key` header (docs/plan.md §2 decision 4). If the key were global, two callers that share a key value, for example a client that hard-codes one, would interfere for 24 hours. With a different payload the second caller gets a 422 for a request it never repeated. With an identical payload it receives the first caller's `personId`.
+`POST /person` takes an `Idempotency-Key` header (docs/plan.md §2 decision 4). If the key were global, two callers that share a key value, for example a client that hard-codes one, would interfere for 24 hours. With a different payload the second caller gets a 422 for a request it never repeated. With an identical payload it receives the first caller's `personId`.
 
 API Gateway IAM auth always provides the caller's principal ARN, so a caller identity is available on every request.
 
