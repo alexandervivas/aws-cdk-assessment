@@ -5,7 +5,9 @@ import java.util.regex.Pattern;
 
 final class FreeText {
 
-    private static final Pattern CONTROL = Pattern.compile("\\p{Cc}");
+    // Lone surrogates (Cs) would turn into "?" when encoded as UTF-8; format (Cf) and
+    // line/paragraph separators (Zl, Zp) are invisible and make equal-looking values differ.
+    private static final Pattern DISALLOWED = Pattern.compile("[\\p{Cc}\\p{Cf}\\p{Cs}\\p{Zl}\\p{Zp}]");
     private static final Pattern EDGE_SPACES = Pattern.compile("^[\\s\\p{Z}]+|[\\s\\p{Z}]+$");
 
     private FreeText() {
@@ -19,8 +21,8 @@ final class FreeText {
         if (text.codePointCount(0, text.length()) > maxLength) {
             throw ValidationException.of(field, "too_long", "must be at most " + maxLength + " characters");
         }
-        if (CONTROL.matcher(text).find()) {
-            throw ValidationException.of(field, "invalid_characters", "must not contain control characters");
+        if (DISALLOWED.matcher(text).find()) {
+            throw ValidationException.of(field, "invalid_characters", "must not contain control or invisible characters");
         }
         return text;
     }

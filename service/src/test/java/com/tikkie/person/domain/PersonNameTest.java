@@ -68,7 +68,9 @@ class PersonNameTest {
                 Arguments.of("a".repeat(101), "too_long"),
                 Arguments.of("Anna1", "invalid_characters"),
                 Arguments.of("<script>", "invalid_characters"),
-                Arguments.of("---", "invalid_characters"));
+                Arguments.of("---", "invalid_characters"),
+                Arguments.of("Anna\uD800", "invalid_characters"),
+                Arguments.of("\uDC00Anna", "invalid_characters"));
     }
 
     @Test
