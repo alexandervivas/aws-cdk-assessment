@@ -2,7 +2,7 @@
 
 ## Events: operations notes
 
-- **Encryption.** The bus and its archive use AWS-owned keys, because events carry no personal data. The dead-letter queue uses the stage CMK.
+- **Encryption.** The bus and its archive use AWS-owned keys, because events carry no personal data. The end-to-end test queue (opt-in, [0016](adr/0016-e2e-support-stack.md)) uses SQS-managed encryption. The dead-letter queue uses the stage CMK.
 - **First deploy.** The pipe reads from `LATEST`. A person created after the API is live but before the pipe reaches RUNNING gets no event. A pipe replacement overlaps old and new pipes, which can produce duplicates but not gaps. Consumers deduplicate on `metadata.eventId`.
 - **Dead-letter queue runbook.** A message in the DLQ holds batch metadata only: shard id, sequence numbers and the failure condition. It holds no `personId`. Errors are logged to the pipe's own log group without execution data, because execution data would include personal data.
   1. Within 24 h, re-read the records from the Persons stream (`GetShardIterator AT_SEQUENCE_NUMBER`, then `GetRecords`) and re-emit `PersonCreated` for each `personId`.
@@ -44,6 +44,7 @@
 | `APIG6` | API stage | No execution logs, which can quote personal data ([0015](adr/0015-cdk-nag-acknowledged-findings.md)) |
 | `COG4` | `POST /person` | IAM authorisation ([0006](adr/0006-iam-authentication.md)) |
 | `SQS3` | Dead-letter queue | It is the Pipe's dead-letter queue ([0001](adr/0001-outbox-via-streams-and-pipes.md)) |
+| `SQS3` | End-to-end test queue, only with `-c e2e=true` | A test sink, so no dead-letter queue ([0015](adr/0015-cdk-nag-acknowledged-findings.md)) |
 
 To acknowledge a new finding, note that CDK's error hint prints the id as `AwsSolutions::AwsSolutions-XXX`. The id that works is `AwsSolutions-XXX`, optionally with a finding in brackets, such as `AwsSolutions-IAM5[Resource::*]`.
 

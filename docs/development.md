@@ -22,7 +22,7 @@ What each level covers (levels follow `docs/plan.md` §8):
 | Architecture | `domain` has no AWS, Jackson or adapter dependency | `service/src/test/.../ArchitectureTest.java` |
 | Integration | Repository against DynamoDB Local: create, replay, key reuse, concurrent duplicates, mapper | `service/src/test/.../adapter/out/dynamodb` |
 | Infrastructure | Template assertions per construct (storage, function, permissions, API, events, monitoring, log data protection), stage and app wiring, cdk-nag with zero unacknowledged findings, snapshots of Dev and Prod | `infra/src/test/...` |
-| End-to-end | Planned, see Status | `e2e/` (module exists, tests skipped) |
+| End-to-end | Test-only `E2eSupportStack` (template tests in `E2eSupportStackTest`); the tests themselves are planned, see Status | `e2e/` (module exists, tests skipped) |
 | Load | Planned, see Status | none yet |
 
 CI (`.github/workflows/ci.yml`) runs `npm ci`, `./mvnw -B verify`, `npx cdk synth`, and uploads the templates from `cdk.out` as an artifact.
@@ -45,3 +45,19 @@ npx cdk deploy "Prod/*" -c devAccount=<dev-account-id> -c prodAccount=<prod-acco
 - Intended pipeline (not built): a GitHub OIDC role per account with no long-lived keys, `cdk deploy "Dev/*"` on merge to `main`, and `cdk deploy "Prod/*"` behind a manual approval environment (`docs/plan.md` §9).
 
 Callers sign requests with SigV4 for service `execute-api` and need `execute-api:Invoke` on `POST /person`.
+
+## End-to-end support stack
+
+The end-to-end tests read `PersonCreated` events from a queue. `E2eSupportStack` provides it: a rule on the existing `person-events-dev` bus, matching `source: tikkie.person-service` and `detail-type: PersonCreated`, that targets an SQS queue. The queue uses SQS-managed encryption, so EventBridge can send without a key policy and no extra KMS key is billed. It keeps messages for one day, rejects requests without TLS, and its policy lets only `events.amazonaws.com` send, and only for this rule (`aws:SourceArn`). It has no dead-letter queue, because it is a test sink ([0015](adr/0015-cdk-nag-acknowledged-findings.md)).
+
+The stack exists only with `-c e2e=true`. Without it, `cdk synth` produces semantically identical Dev and Prod assemblies ([0016](adr/0016-e2e-support-stack.md)). It is a top-level stack, not part of a stage, and uses the Dev account and region. Deploy it into the same dedicated account as Dev ([ADR 0014](adr/0014-account-level-apigateway-logging-role.md)):
+
+The rule needs the bus to exist, and CDK can't order stacks across assemblies, so deploy in two steps:
+
+```bash
+./mvnw -B package -DskipTests
+npx cdk deploy "Dev/*" -c devAccount=<dev-account-id> -c prodAccount=<prod-account-id>
+npx cdk deploy E2eSupportStack -c e2e=true -c devAccount=<dev-account-id> -c prodAccount=<prod-account-id>
+```
+
+Destroy `E2eSupportStack` before `Dev/*`. The stack outputs `QueueUrl`, which the end-to-end tests read as `E2E_QUEUE_URL`. Remove it with `npx cdk destroy E2eSupportStack -c e2e=true` with the same account context.

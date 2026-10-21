@@ -67,7 +67,7 @@ public final class PersonEvents extends Construct {
     public PersonEvents(Construct scope, String id, EnvironmentConfig config, PersonStorage storage) {
         super(scope, id);
         this.bus = EventBus.Builder.create(this, "Bus")
-                .eventBusName("person-events-" + config.stageName())
+                .eventBusName(busName(config))
                 .build();
         bus.archive("Archive", BaseArchiveProps.builder()
                 .description("Person Service events")
@@ -104,6 +104,10 @@ public final class PersonEvents extends Construct {
         pipe.getNode().addDependency(role);
         CfnOutput.Builder.create(this, "BusName").value(bus.getEventBusName()).build();
         CfnOutput.Builder.create(this, "BusArn").value(bus.getEventBusArn()).build();
+    }
+
+    public static String busName(EnvironmentConfig config) {
+        return "person-events-" + config.stageName();
     }
 
     public Queue deadLetterQueue() {

@@ -19,3 +19,4 @@ Format: Status, Context, Decision, Consequences, Rejected alternatives. Decision
 | [0013](0013-iam-wildcard-exceptions.md) | The few IAM wildcards that cannot be avoided, enforced by a test. |
 | [0014](0014-account-level-apigateway-logging-role.md) | The stack sets the account-level API Gateway logging role. Use a dedicated account. |
 | [0015](0015-cdk-nag-acknowledged-findings.md) | cdk-nag gates synthesis; each acknowledged finding cites an ADR. No WAF, no execution logs. |
+| [0016](0016-e2e-support-stack.md) | Separate, opt-in stack for end-to-end tests |

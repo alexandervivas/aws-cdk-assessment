@@ -20,12 +20,15 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.FeatureFlags;
 import software.amazon.awscdk.Token;
+import software.amazon.awscdk.cxapi.CloudAssembly;
+import software.amazon.awscdk.cxapi.CloudFormationStackArtifact;
 
 class PersonServiceAppTest {
 
     private static final Pattern ACCOUNT_ID = Pattern.compile("\\b\\d{12}\\b");
     private static final String DEV_ACCOUNT = "111111111111";
     private static final String PROD_ACCOUNT = "222222222222";
+    private static final String E2E_SUPPORT_STACK = "E2eSupportStack";
 
     @Test
     void buildsDevAndProdStagesWithTheirOwnConfig() {
@@ -177,6 +180,63 @@ class PersonServiceAppTest {
         PersonServiceApp.addStages(app, Map.of());
 
         assertThat(app.synth().getNestedAssemblies()).hasSize(2);
+    }
+
+    @Test
+    void addsNoE2eSupportStackByDefault() {
+        App app = withCdkJsonContext();
+
+        PersonServiceApp.addStages(app, Map.of());
+
+        assertThat(app.getNode().tryFindChild(E2E_SUPPORT_STACK)).isNull();
+    }
+
+    @Test
+    void addsNoE2eSupportStackWhenTheFlagIsFalse() {
+        App app = withCdkJsonContext(Map.of("e2e", "false"));
+
+        PersonServiceApp.addStages(app, Map.of());
+
+        assertThat(app.getNode().tryFindChild(E2E_SUPPORT_STACK)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", " true "})
+    void addsTheE2eSupportStackAtTheTopLevelWhenTheFlagIsTrue(String flag) {
+        App app = withCdkJsonContext(Map.of("e2e", flag, "devAccount", DEV_ACCOUNT, "prodAccount", PROD_ACCOUNT));
+
+        PersonServiceApp.addStages(app, Map.of());
+
+        assertThat(app.getNode().tryFindChild(E2E_SUPPORT_STACK)).isInstanceOf(E2eSupportStack.class);
+        assertThat(((E2eSupportStack) app.getNode().findChild(E2E_SUPPORT_STACK)).getAccount()).isEqualTo(DEV_ACCOUNT);
+    }
+
+    @Test
+    void acceptsABooleanE2eFlag() {
+        App app = withCdkJsonContext(Map.of("e2e", true));
+
+        PersonServiceApp.addStages(app, Map.of());
+
+        assertThat(app.getNode().tryFindChild(E2E_SUPPORT_STACK)).isInstanceOf(E2eSupportStack.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"yes", "1", "TRUE"})
+    void rejectsAnE2eFlagThatIsNotTrueOrFalse(String flag) {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> addStagesWithContext(Map.of("e2e", flag)))
+                .withMessageContaining("e2e must be true or false");
+    }
+
+    @Test
+    void synthesisesTheE2eSupportStackNextToBothStages() {
+        App app = withCdkJsonContext(Map.of("e2e", "true"));
+        PersonServiceApp.addStages(app, Map.of());
+
+        CloudAssembly assembly = app.synth();
+
+        assertThat(assembly.getStacks()).extracting(CloudFormationStackArtifact::getStackName).containsExactly(E2E_SUPPORT_STACK);
+        assertThat(assembly.getNestedAssemblies()).hasSize(2);
     }
 
     @Test

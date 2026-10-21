@@ -51,8 +51,25 @@ public final class PersonServiceApp {
 
         String defaultAccount = environmentVariables.get("CDK_DEFAULT_ACCOUNT");
         String resolvedRegion = firstPresent(region, environmentVariables.get("CDK_DEFAULT_REGION"), DEFAULT_REGION);
-        new PersonServiceStage(app, environment(firstPresent(devAccount, defaultAccount), resolvedRegion), EnvironmentConfig.dev());
+        Environment devEnvironment = environment(firstPresent(devAccount, defaultAccount), resolvedRegion);
+        new PersonServiceStage(app, devEnvironment, EnvironmentConfig.dev());
         new PersonServiceStage(app, environment(firstPresent(prodAccount, defaultAccount), resolvedRegion), EnvironmentConfig.prod());
+        if (e2eRequested(app)) {
+            new E2eSupportStack(app, "E2eSupportStack", devEnvironment, EnvironmentConfig.dev());
+        }
+    }
+
+    // The CLI passes -c e2e=true as the string "true"; cdk.json or a test may pass a boolean.
+    private static boolean e2eRequested(App app) {
+        Object value = app.getNode().tryGetContext("e2e");
+        if (value == null) {
+            return false;
+        }
+        String flag = value.toString().trim();
+        if (!flag.equals("true") && !flag.equals("false")) {
+            throw new IllegalArgumentException("e2e must be true or false");
+        }
+        return flag.equals("true");
     }
 
     private static void requireDistinctAccountPair(String devAccount, String prodAccount) {
