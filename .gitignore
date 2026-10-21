@@ -1,5 +1,6 @@
 target/
 cdk.out/
+cdk.context.json
 node_modules/
 .idea/
 *.iml
