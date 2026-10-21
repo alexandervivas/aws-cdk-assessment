@@ -28,6 +28,24 @@ class JsonTest {
                 .isThrownBy(() -> Json.MAPPER.readValue("{\"text\": \"a\", \"other\": \"b\"}", Sample.class));
     }
 
+    // Two components, duplicate first: with one component Jackson rejects the repeat on its own,
+    // which would hide a missing duplicate-key check.
+    @Test
+    void rejectsADuplicateKey() {
+        assertThatExceptionOfType(JsonProcessingException.class)
+                .isThrownBy(() -> Json.MAPPER.readValue(
+                        "{\"text\": \"a\", \"text\": \"b\", \"other\": \"c\"}", TwoFields.class));
+    }
+
+    @Test
+    void rejectsASecondRootValue() {
+        assertThatExceptionOfType(JsonProcessingException.class)
+                .isThrownBy(() -> Json.MAPPER.readValue("{\"text\": \"a\"} {}", Sample.class));
+    }
+
     record Sample(String text) {
+    }
+
+    record TwoFields(String text, String other) {
     }
 }
