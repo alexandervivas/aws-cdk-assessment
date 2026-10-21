@@ -66,18 +66,19 @@ class AwsSolutionsChecksTest {
     }
 
     @Test
-    void synthesisFailsOnAnUnacknowledgedError() {
+    void synthesisFailsOnAnUnacknowledgedErrorInsideAStage() {
         App app = withCdkJsonContext();
-        new Queue(new Stack(app, "Unchecked"), "QueueWithoutDeadLetterQueue");
+        addUncheckedQueueInsideAStage(app);
         PersonServiceApp.checkAwsSolutions(app);
 
         assertThatThrownBy(app::synth).hasMessageContaining("Validation failed");
     }
 
+    // The production topology: every stack sits in a stage, so the CLI selects none and would report nothing.
     @Test
-    void theAppFailsSynthesisAndNamesTheFindingEvenWhenTheCliOffersToReport() {
+    void theAppFailsSynthesisAndNamesTheFindingInsideAStageEvenWhenTheCliOffersToReport() {
         App app = PersonServiceApp.newApp(Map.of("@aws-cdk/core:failSynthOnValidationErrors", false));
-        new Queue(new Stack(app, "Unchecked"), "QueueWithoutDeadLetterQueue");
+        addUncheckedQueueInsideAStage(app);
         PersonServiceApp.checkAwsSolutions(app);
 
         assertThatThrownBy(app::synth).hasMessageContaining("AwsSolutions-SQS3");
@@ -99,6 +100,11 @@ class AwsSolutionsChecksTest {
                 apiStage + " AwsSolutions-APIG3",
                 apiStage + " AwsSolutions-APIG6",
                 stack + "Api/RestApi/Default/person/POST AwsSolutions-COG4");
+    }
+
+    private static void addUncheckedQueueInsideAStage(App app) {
+        Stack stack = new Stack(new Stage(app, "Unchecked"), "Stack");
+        new Queue(stack, "QueueWithoutDeadLetterQueue");
     }
 
     private static App appWithStages() {
