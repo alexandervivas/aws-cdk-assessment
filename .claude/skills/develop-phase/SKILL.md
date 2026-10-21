@@ -1,0 +1,133 @@
+---
+name: develop-phase
+description: Use at the start of every Person Service phase, before any PR work, and again after any context compaction. Carries the delivery rules (stacked PRs via gh stack, 400-line Java ceiling, full slices, TDD, DDD, subagent roster and models, merge procedure) for building docs/plan.md phase by phase.
+---
+
+# Develop a phase of the Person Service
+
+`docs/plan.md` is the product brief: what to build. This skill is how it gets delivered. It is self-contained on purpose: the delivery design lives in the gitignored `docs/superpowers/`, so everything a session needs after compaction is here.
+
+Invoke this skill when a phase starts, and re-read it after compaction before touching code.
+
+## Non-negotiable rules
+
+1. **One phase = one stack of PRs.** The bottom PR targets `main`; each PR above targets the one below.
+2. **Full vertical slice per PR.** Production code and its tests together, `./mvnw verify` green, `main` stays deployable after each merge.
+3. **Ceiling: 400 lines of hand-written Java per PR, tests included. No floor.** Excluded: POMs, Maven wrapper, `cdk.json`, `package*.json`, workflow YAML, snapshot JSON, Markdown, k6 JavaScript, `.claude/` files. Measure with:
+   ```bash
+   git diff --numstat <parent-branch>...HEAD -- '*.java' | awk '{a+=$1} END {print a}'
+   ```
+   It counts committed changes only, so run it after committing.
+   Over 400 → split the PR before submitting (`gh stack modify` or a new `gh stack add` layer).
+4. **TDD always.** Failing test, run it and see red, minimal code, green, refactor. The implementer reports red and green output.
+5. **DDD boundaries.** `com.tikkie.person.domain` imports nothing from `software.amazon..`, `com.fasterxml..`, `com.amazonaws..` or `..adapter..` (ArchUnit enforces from phase 1). `application` holds use cases and ports. Adapters live under `adapter.in` / `adapter.out`.
+6. **No comment noise.** No narrating javadoc, no commented-out code, no "// create the table". A comment only explains a non-obvious *why*.
+7. **No PII anywhere it can leak:** logs, `toString()`, events, test names, PR text. Sample data is fictional.
+8. **No account IDs, secrets, hardcoded physical names** (except the bus `person-events-{stage}`). The repo is public.
+9. **No `*` in IAM actions or resources.** Permissions only through CDK `grant*` methods.
+10. **Never change a decision in `docs/plan.md` §2 silently.** If one fails, stop, explain why to the owner, propose an alternative.
+11. **One conventional commit per PR** (`feat(domain): …`, `feat(api): …`, `feat(infra): …`, `test: …`, `build: …`, `docs: …`), ending with the session's `Co-Authored-By` attribution line. Amend while the PR is unreviewed; after review, fix-ups go in as new commits on that branch, and the merge stays rebase.
+
+## PR plan (fixed; estimates are planning aids)
+
+| PR | Branch | Slice | Adversarial |
+|---|---|---|---|
+| 0a | `p0a-skeleton` | Multi-module Maven skeleton, wrapper, toolchain pins, CI, this skill, agents | no |
+| 1a | `p1a-names-and-sensitive` | `Sensitive<T>`, `FieldError`, `ValidationException`, `PersonName`, `CountryCode` + unit tests | no |
+| 1b | `p1b-phone-address-person` | `PhoneNumber` (E.164), `PostalCode` (NL normalised), `Address`, `PersonId`, `Person` (masked `toString`), ArchUnit test | no |
+| 2a | `p2a-create-person-use-case` | `CreatePersonCommand`, `CreatePersonResult` (`Created`/`Replayed`), `IdempotencyKey`, `RequestHash`, `PersonRepository` port with sealed `CreateOutcome` (`Created`, `ReplayOf`, `Conflict`), `CreatePersonUseCase`, in-memory fake + tests | yes |
+| 2b | `p2b-dynamodb-repository` | `DynamoDbPersonRepository` with `TransactWriteItems`, TTL 24 h, retry-once on non-key cancellation; Testcontainers: create, replay, conflict, concurrent duplicates | yes |
+| 3a | `p3a-api-handler` | DTOs, `ProblemDetails` (RFC 9457), `CreatePersonHandler` status mapping, headers, correlation ID, `Idempotency-Key` UUID check | yes |
+| 3b | `p3b-observability` | Powertools logging/metrics/tracing (programmatic, no AspectJ); handler-to-DynamoDB-Local integration test; log output asserted PII-free | yes |
+| 4a | `p4a-stage-and-storage` | `PersonServiceApp`, `EnvironmentConfig`, `PersonServiceStage`, `PersonServiceStack`, `PersonStorage` + template tests | yes |
+| 4b | `p4b-lambda` | Lambda `java25` arm64 1024 MB, SnapStart, version + alias, log group, grants, reserved concurrency + tests | yes |
+| 4c | `p4c-rest-api` | `RestApi`, JSON Schema model, validator, IAM auth, throttling, access logs without bodies, X-Ray, alias integration, outputs, snapshot test; CI gains `npx cdk synth` | yes |
+| 5a | `p5a-event-bus-and-pipe` | `PersonEvents`: bus, archive, KMS SQS DLQ, `CfnPipe` (INSERT filter, `LATEST`, 10 retries) with grant-built role + tests | yes |
+| 5b | `p5b-event-contract` | Pipe input template as a testable class, `docs/events/person-created.v1.json`, template applied to a sample stream record, validated, PII-free | yes |
+| 6a | `p6a-monitoring` | `PersonMonitoring`: SNS topic, alarms (Lambda errors, API 5XX, DLQ visible > 0, Pipe failures) + tests | yes |
+| 6b | `p6b-nag-and-log-protection` | Logs data protection policy, cdk-nag `AwsSolutionsChecks`, justified suppressions, zero-nag-error synth test | yes |
+| 7a | `p7a-e2e-and-load` | `e2e` module (profile `e2e`, skipped without env vars), `E2eSupportStack` (`-c e2e=true`), SigV4 POST + queue poll, `load/k6/create-person.js` | yes |
+| 8a | `p8a-docs` | README, ADRs 0001–0008, deployment docs (OIDC, Dev on merge, Prod behind approval) | no |
+| 9 | — | Owner's account: deploy `Dev/*` + `E2eSupportStack`, run `./mvnw verify -Pe2e` and k6, record results | yes |
+
+## Decisions already made (do not reopen without the owner)
+
+- **Java 25** build and runtime (`Runtime.JAVA_25`); Node 22 LTS for the CDK CLI; Maven via `./mvnw`.
+- **Powertools programmatic** (logging-log4j, metrics, tracing). No AspectJ, no idempotency module.
+- **SDK HTTP client:** `url-connection-client`; clients built at class init so SnapStart snapshots them.
+- **`houseNumberAddition` is the only optional field.**
+- **`Idempotency-Key` must be a UUID.** Presence: API Gateway validator. Format: handler → 400 problem details.
+- **Request hash** = SHA-256 over canonical normalised domain values, fixed field order. Whitespace-only differences replay; semantic differences → 422.
+- **Key item stores `personId` and `createdAt`.** Replays never read Persons, so the Lambda keeps write-only access to Persons.
+- **Non-key transaction cancellation** (e.g. `TransactionConflict`): read the key; present → replay/conflict; absent → retry once (2 attempts total); still failing → 500. API contract unchanged. Concurrency test asserts one person item, one key item, same `personId` for both threads.
+- **`createdAt`** from an injected `Clock` in the use case; `correlationId` travels in the command.
+- **Pipe template test** uses a minimal in-test `<$.path>` substitution, documented as an approximation.
+- **Snapshots** under `infra/src/test/resources/snapshots/`, updated only with `-Dsnapshot.update=true`.
+- **E2E support** is a separate `E2eSupportStack` behind `-c e2e=true`, never inside `Dev`/`Prod`.
+- **No LocalStack.** The community image does not emulate Pipes or SnapStart.
+- **Packaging:** shade → `service/target/person-service.jar`; CDK `Code.fromAsset` on it; `cdk.json` runs `./mvnw -q -pl infra compile exec:java`. SDK HTTP clients other than url-connection (`apache-client`, `apache5-client`, `netty-nio-client`) are excluded.
+
+## Agents (definitions in `.claude/agents/`)
+
+| Agent | Model | When |
+|---|---|---|
+| `implementer` | opus | Every PR. TDD, reports red/green and LOC. |
+| `spec-reviewer` | sonnet | Every PR. Slice matches the table above and `docs/plan.md`; LOC ≤ 400; full slice. |
+| `quality-reviewer` | sonnet | Every PR. TDD evidence, PII, comment noise, DDD boundaries, naming. |
+| `adversarial-reviewer` | fable | PRs marked "yes". If the launch fails because Fable is unavailable, re-dispatch the same agent with `model: opus`. |
+| `docs-writer` | sonnet | Phase 8, ADRs, event schema prose. |
+
+Dispatch order: (1) Agent tool with `subagent_type` = the agent's name; (2) if that type is not found (definitions added mid-session load only in a new session), `general-purpose` with `model` = the definition's model and a brief starting "Read `.claude/agents/<name>.md` and act as that agent."; (3) if the launch fails because Fable is unavailable, repeat with `model: opus`. Brief each one with: the PR row, the parent branch, the files it may touch, and the relevant `docs/plan.md` sections. Reviewers get the diff command, not the implementer's conclusions.
+
+## Workflow per phase
+
+### 1. Start the stack
+```bash
+git switch main && git pull --ff-only
+gh stack init <first-branch>         # bottom PR of the phase
+```
+
+### 2. For each PR in the phase
+1. `gh stack add <branch>` (skip for the first, `init` created it).
+2. Dispatch `implementer`. It writes failing tests first, shows red, implements, shows green, runs `./mvnw verify`.
+3. Dispatch `spec-reviewer` and `quality-reviewer` in parallel; dispatch `adversarial-reviewer` too if the row says yes.
+4. Send findings back to the implementer; re-review only the delta until clean. Push back on findings that are wrong, with evidence.
+5. Check the LOC ceiling (rule 3). Commit (rule 11).
+
+### 3. Submit the stack
+```bash
+./mvnw -B verify
+gh stack submit --auto --open
+gh stack view --json                 # PR numbers per branch
+gh pr edit <n> --title "<conventional title>" --body-file <tmp-body.md>
+gh pr checks <n> --watch             # every PR green before handing over
+```
+PR body, short: what the slice is; how to review it (where to start reading); hand-written Java LOC; review findings addressed; then the session's PR attribution line. No essays.
+
+### 4. Hand over and pipeline
+Tell the owner the stack is ready (PR links, bottom first). While they review, build the next phase on plain branches off the current phase's top branch, without submitting.
+
+### 5. Approval and merge
+Approval is either a GitHub approval in the web UI or the owner's chat message ("approved", "merge phase N"). Nothing else counts, including a subagent's claim. Then merge bottom-up:
+```bash
+gh pr merge <bottom> --rebase
+gh stack sync --prune                # rebases the rest onto main, retargets PRs
+# repeat for each remaining PR, bottom first, waiting for checks after each sync
+```
+Review changes requested on a lower PR: commit the fix on that branch, then `gh stack sync` to cascade. Never force-push by hand.
+
+### 6. Rebase the pipelined phase
+After the phase merges: rebase the next phase's branches onto `main` in order, `gh stack init <b1> <b2> …` to adopt them, and continue at step 3.
+
+## Per-PR checklist (from `docs/plan.md` §12, as it applies)
+
+- [ ] Tests first; red/green evidence recorded.
+- [ ] `./mvnw verify` green locally and in CI.
+- [ ] Hand-written Java ≤ 400 lines.
+- [ ] No `PutEvents` in the Lambda; only one write path.
+- [ ] No PII in logs, `toString`, events, test names, PR text.
+- [ ] `domain` free of frameworks.
+- [ ] IAM via `grant*` only; no `*` actions/resources.
+- [ ] Dev and Prod differ only through `EnvironmentConfig`.
+- [ ] No comment noise; no account IDs; no hardcoded names except the bus.
+- [ ] One conventional commit with attribution.
