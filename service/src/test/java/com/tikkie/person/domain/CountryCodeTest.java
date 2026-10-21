@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -18,6 +19,11 @@ class CountryCodeTest {
     @ValueSource(strings = {"NL", "DE"})
     void acceptsIsoAlpha2Codes(String raw) {
         assertThat(CountryCode.parse(FIELD, raw).value()).isEqualTo(raw);
+    }
+
+    @Test
+    void netherlandsConstantEqualsParsedCode() {
+        assertThat(CountryCode.parse(FIELD, "NL")).isEqualTo(CountryCode.NL);
     }
 
     @ParameterizedTest

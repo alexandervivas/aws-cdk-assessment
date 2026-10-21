@@ -18,6 +18,7 @@ Constraints:
 - No comment noise: no narrating javadoc, no commented-out code. Comment only a non-obvious why.
 - No PII in logs, `toString()` or test names. Use fictional sample data.
 - IAM only via CDK `grant*`. No `*` actions or resources. No account IDs, no hardcoded physical names except the event bus.
+- Never drop a test, an invariant or a null check to meet the ~400-line target. Split at a natural seam, or go over and say why.
 - If a decision in `docs/plan.md` §2 or the skill's decision list does not work, stop and report why with evidence instead of working around it.
 - Don't commit or push unless your brief says to.
 

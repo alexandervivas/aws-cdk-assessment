@@ -49,6 +49,16 @@ class PersonNameTest {
         assertThat(PersonName.parse(FIELD, "a".repeat(100)).value().reveal()).hasSize(100);
     }
 
+    @Test
+    void countsLengthInCodePointsNotChars() {
+        String supplementaryLetter = new String(Character.toChars(0x20000));
+
+        assertThat(PersonName.parse(FIELD, supplementaryLetter.repeat(100))).isNotNull();
+        assertThatThrownBy(() -> PersonName.parse(FIELD, supplementaryLetter.repeat(101)))
+                .isInstanceOfSatisfying(ValidationException.class, e ->
+                        assertThat(e.errors().getFirst().code()).isEqualTo("too_long"));
+    }
+
     @ParameterizedTest
     @MethodSource("invalidNames")
     void rejectsInvalidNames(String raw, String expectedCode) {
@@ -70,7 +80,10 @@ class PersonNameTest {
                 Arguments.of("<script>", "invalid_characters"),
                 Arguments.of("---", "invalid_characters"),
                 Arguments.of("Anna\uD800", "invalid_characters"),
-                Arguments.of("\uDC00Anna", "invalid_characters"));
+                Arguments.of("\uDC00Anna", "invalid_characters"),
+                Arguments.of("'", "invalid_characters"),
+                Arguments.of("- -", "invalid_characters"),
+                Arguments.of("J. Example", "invalid_characters"));
     }
 
     @Test
