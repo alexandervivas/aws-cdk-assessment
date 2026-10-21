@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PersonCreated v1",
+  "description": "A person was created in the Person Service. An EventBridge Pipe publishes it from the Persons table stream to the person-events-{stage} bus. The event is thin: it identifies the person and carries no personal data. Delivery is at-least-once, so the same event can arrive more than once: consumers must be idempotent on detail.metadata.eventId.",
+  "type": "object",
+  "required": [
+    "source",
+    "detail-type",
+    "detail"
+  ],
+  "properties": {
+    "source": {
+      "const": "tikkie.person-service"
+    },
+    "detail-type": {
+      "const": "PersonCreated"
+    },
+    "detail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metadata",
+        "data"
+      ],
+      "properties": {
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "eventId",
+            "eventVersion",
+            "occurredAt",
+            "correlationId"
+          ],
+          "properties": {
+            "eventId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The eventID of the DynamoDB stream record. It stays the same when the record is delivered again, unlike the EventBridge envelope id. Deduplicate on it."
+            },
+            "eventVersion": {
+              "type": "string",
+              "const": "1"
+            },
+            "occurredAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When the person was created, in UTC."
+            },
+            "correlationId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]{1,64}$",
+              "description": "The correlation id of the request that created the person. Caller-supplied through the X-Correlation-Id header (or generated). It is broadcast to every subscriber and archived, so callers must not put personal data in it."
+            }
+          }
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "personId"
+          ],
+          "properties": {
+            "personId": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      }
+    }
+  }
+}
