@@ -13,8 +13,10 @@ Update this section when a phase lands.
 | 4 | Storage, function, API, stage and stack | Built |
 | 5a | Event bus, archive, Pipe, dead-letter queue | Built |
 | 5b | Event JSON Schema at `docs/events/person-created.v1.json`, contract test | Built |
-| 6 | Monitoring alarms and SNS topic, cdk-nag with justified suppressions, CloudWatch Logs data protection policy | Built |
+| 6 | Monitoring alarms and SNS topic, cdk-nag with ADR-justified acknowledgements, CloudWatch Logs data protection policy | Built |
 | 7 | End-to-end module with a test-only rule and queue, k6 load script | Built |
+| 8 | README (diagram and links), `docs/` pages, ADRs 0001–0016 | Built (pulled forward into phase 5, kept current since) |
+| 9 | First deploy to a dedicated account and the [first deploy checklist](development.md#first-deploy-checklist) | Open: needs an AWS account |
 
 The alarms and the cdk-nag gate are described in [operations](operations.md#alarms) and [cdk-nag acknowledgements](operations.md#cdk-nag-acknowledgements), the log data protection policy in [risks and privacy](risks-and-privacy.md#privacy-and-pii).
 
