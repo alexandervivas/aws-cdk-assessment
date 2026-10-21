@@ -62,8 +62,9 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 - **SDK HTTP client:** `url-connection-client`; clients built at class init so SnapStart snapshots them.
 - **`houseNumberAddition` is the only optional field.**
 - **`Idempotency-Key` must be a UUID.** Presence: API Gateway validator. Format: handler → 400 problem details.
-- **Request hash** = SHA-256 over canonical normalised domain values, fixed field order. Whitespace-only differences replay; semantic differences → 422.
+- **Request fingerprint** is computed over canonical normalised domain values in a fixed field order. Whitespace-only differences replay; semantic differences → 422.
 - **Idempotency keys are scoped per caller** (IAM principal, STS session name stripped); key table partition key value is `<callerId>|<idempotencyKey>`. Owner decision, 2026-10-21.
+- **Request fingerprint: SHA-256 behind the `RequestFingerprinter` port for the MVP.** A KMS HMAC was rejected for cost, latency and an extra failure point per request; it is a roadmap item and a one-class swap. Canonical form `v1` + `\u001F`-joined normalised values. Owner decision, 2026-10-21 (ADR 0010).
 - **Key item stores `personId` and `createdAt`.** Replays never read Persons, so the Lambda keeps write-only access to Persons.
 - **Non-key transaction cancellation** (e.g. `TransactionConflict`): read the key; present → replay/conflict; absent → retry once (2 attempts total); still failing → 500. API contract unchanged. Concurrency test asserts one person item, one key item, same `personId` for both threads.
 - **`createdAt`** from an injected `Clock` in the use case; `correlationId` travels in the command.
