@@ -45,9 +45,10 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 | 3a | `p3a-api-support` | `ProblemDetails` (RFC 9457), `CorrelationId`, strict `Json` mapper, 415 problem type; ADR 0012 | yes |
 | 3b | `p3b-api-handler` | `CreatePersonHandler`: Content-Type, caller, `Idempotency-Key`, base64 body, status mapping, header precedence | yes |
 | 3c | `p3c-observability` | Powertools logging/metrics/tracing (programmatic), `ProductionWiring` with latency budget, telemetry-safe, PII guards | yes |
-| 4a | `p4a-stage-and-storage` | `PersonServiceApp`, `EnvironmentConfig`, `PersonServiceStage`, `PersonServiceStack`, `PersonStorage` + template tests | yes |
-| 4b | `p4b-lambda` | Lambda `java25` arm64 1024 MB, SnapStart, version + alias, log group, grants, reserved concurrency + tests | yes |
-| 4c | `p4c-rest-api` | `RestApi`, JSON Schema model, validator, IAM auth, throttling, access logs without bodies, X-Ray, alias integration, outputs, snapshot test; CI gains `npx cdk synth` | yes |
+| 4a | `p4a-cdk-app` | `PersonServiceApp`, `EnvironmentConfig`, stages and stack; validated account/region context; recommended feature flags; prod termination protection | yes |
+| 4b | `p4b-storage` | `PersonStorage`: CMK with rotation, Persons (stream `NEW_IMAGE`) and IdempotencyKeys (TTL) `TableV2`s, PITR/retention per stage | yes |
+| 4c | `p4c-lambda` | `PersonFunction`: Java 25 arm64 SnapStart behind alias `live`, explicit role without managed policies, own log group, least-privilege grants; ADR 0013 | yes |
+| 4d | `p4d-rest-api` | `RestApi`, JSON Schema model, validator, IAM auth, throttling, body-free access logs, X-Ray, alias integration, outputs, snapshot test; CI `cdk synth` | yes |
 | 5a | `p5a-event-bus-and-pipe` | `PersonEvents`: bus, archive, KMS SQS DLQ, `CfnPipe` (INSERT filter, `LATEST`, 10 retries) with grant-built role + tests | yes |
 | 5b | `p5b-event-contract` | Pipe input template as a testable class, `docs/events/person-created.v1.json`, template applied to a sample stream record, validated, PII-free | yes |
 | 6a | `p6a-monitoring` | `PersonMonitoring`: SNS topic, alarms (Lambda errors, API 5XX, DLQ visible > 0, Pipe failures) + tests | yes |
@@ -64,6 +65,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 - **`houseNumberAddition` is the only optional field.**
 - **`Idempotency-Key` must be a UUID.** Presence: API Gateway validator. Format: handler → 400 problem details.
 - **Request fingerprint** is computed over canonical normalised domain values in a fixed field order. Whitespace-only differences replay; semantic differences → 422.
+- **IAM wildcard exceptions** (ADR 0013): X-Ray write actions on `*`, the function's own log-group ARN (`:*` stream suffix), and KMS `ReEncrypt*`/`GenerateDataKey*` on the stage key. Any other wildcard fails the build.
 - **415 for non-JSON content types** (ADR 0012); API Gateway skips body validation for unmapped content types.
 - **Idempotency keys are scoped per caller** (IAM principal, STS session name stripped); key table partition key value is `<callerId>|<idempotencyKey>`. Owner decision, 2026-10-21.
 - **Request fingerprint: SHA-256 behind the `RequestFingerprinter` port for the MVP.** A KMS HMAC was rejected for cost, latency and an extra failure point per request; it is a roadmap item and a one-class swap. Canonical form `v1` + `\u001F`-joined normalised values. Owner decision, 2026-10-21 (ADR 0010).
