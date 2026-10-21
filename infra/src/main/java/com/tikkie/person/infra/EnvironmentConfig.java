@@ -19,10 +19,15 @@ public record EnvironmentConfig(
         AlarmThresholds alarmThresholds,
         Duration eventArchiveRetention) {
 
-    public record AlarmThresholds(int lambdaErrors, int apiServerErrors) {
+    // Each alarm fires when its five-minute sum reaches the threshold, so zero would leave it permanently in alarm.
+    public record AlarmThresholds(
+            int unexpectedErrors, int apiServerErrors, int lambdaErrors, int pipeFailures, int lambdaThrottles) {
         public AlarmThresholds {
-            requireNotNegative(lambdaErrors, "lambdaErrors");
-            requireNotNegative(apiServerErrors, "apiServerErrors");
+            requireAtLeastOne(unexpectedErrors, "unexpectedErrors");
+            requireAtLeastOne(apiServerErrors, "apiServerErrors");
+            requireAtLeastOne(lambdaErrors, "lambdaErrors");
+            requireAtLeastOne(pipeFailures, "pipeFailures");
+            requireAtLeastOne(lambdaThrottles, "lambdaThrottles");
         }
     }
 
@@ -63,7 +68,7 @@ public record EnvironmentConfig(
                 10,
                 20,
                 null,
-                new AlarmThresholds(5, 5),
+                new AlarmThresholds(5, 5, 1, 1, 1),
                 Duration.ofDays(7));
     }
 
@@ -79,7 +84,7 @@ public record EnvironmentConfig(
                 100,
                 100,
                 100,
-                new AlarmThresholds(1, 1),
+                new AlarmThresholds(1, 1, 1, 1, 1),
                 Duration.ofDays(30));
     }
 
@@ -87,9 +92,9 @@ public record EnvironmentConfig(
         return duration.isPositive() && duration.equals(Duration.ofDays(duration.toDays()));
     }
 
-    private static void requireNotNegative(int value, String name) {
-        if (value < 0) {
-            throw new IllegalArgumentException(name + " must not be negative");
+    private static void requireAtLeastOne(int value, String name) {
+        if (value < 1) {
+            throw new IllegalArgumentException(name + " must be at least 1");
         }
     }
 }

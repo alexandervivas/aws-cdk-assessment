@@ -20,6 +20,11 @@
       "Value" : {
         "Ref" : "EventsBus45DE4339"
       }
+    },
+    "MonitoringAlarmTopicArn78A8E021" : {
+      "Value" : {
+        "Ref" : "MonitoringAlarmTopicAF62D4F1"
+      }
     }
   },
   "Parameters" : {
@@ -464,7 +469,7 @@
             },
             "POWERTOOLS_LOG_LEVEL" : "INFO",
             "POWERTOOLS_METRICS_NAMESPACE" : "PersonService",
-            "POWERTOOLS_SERVICE_NAME" : "person-service"
+            "POWERTOOLS_SERVICE_NAME" : "person-service-prod"
           }
         },
         "Handler" : "com.tikkie.person.adapter.in.api.CreatePersonHandler::handleRequest",
@@ -576,6 +581,206 @@
       },
       "Type" : "AWS::IAM::Policy"
     },
+    "MonitoringAlarmTopicAF62D4F1" : {
+      "Properties" : {
+        "KmsMasterKeyId" : {
+          "Fn::GetAtt" : [ "StorageTablesKey006F3A78", "Arn" ]
+        }
+      },
+      "Type" : "AWS::SNS::Topic"
+    },
+    "MonitoringAlarmTopicPolicyCB9CCFB0" : {
+      "Properties" : {
+        "PolicyDocument" : {
+          "Statement" : [ {
+            "Action" : "sns:Publish",
+            "Condition" : {
+              "Bool" : {
+                "aws:SecureTransport" : "false"
+              }
+            },
+            "Effect" : "Deny",
+            "Principal" : "*",
+            "Resource" : {
+              "Ref" : "MonitoringAlarmTopicAF62D4F1"
+            },
+            "Sid" : "AllowPublishThroughSSLOnly"
+          }, {
+            "Action" : "sns:Publish",
+            "Condition" : {
+              "ArnLike" : {
+                "aws:SourceArn" : {
+                  "Fn::Join" : [ "", [ "arn:", {
+                    "Ref" : "AWS::Partition"
+                  }, ":cloudwatch:", {
+                    "Ref" : "AWS::Region"
+                  }, ":", {
+                    "Ref" : "AWS::AccountId"
+                  }, ":alarm:*" ] ]
+                }
+              },
+              "StringEquals" : {
+                "aws:SourceAccount" : {
+                  "Ref" : "AWS::AccountId"
+                }
+              }
+            },
+            "Effect" : "Allow",
+            "Principal" : {
+              "Service" : "cloudwatch.amazonaws.com"
+            },
+            "Resource" : {
+              "Ref" : "MonitoringAlarmTopicAF62D4F1"
+            },
+            "Sid" : "AllowThisAccountsCloudWatchAlarms"
+          } ],
+          "Version" : "2012-10-17"
+        },
+        "Topics" : [ {
+          "Ref" : "MonitoringAlarmTopicAF62D4F1"
+        } ]
+      },
+      "Type" : "AWS::SNS::TopicPolicy"
+    },
+    "MonitoringApiServerErrors2BC6641E" : {
+      "Properties" : {
+        "AlarmActions" : [ {
+          "Ref" : "MonitoringAlarmTopicAF62D4F1"
+        } ],
+        "AlarmDescription" : "API Gateway answered with a 5XX, from the handler or before reaching it",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "Dimensions" : [ {
+          "Name" : "ApiName",
+          "Value" : "person-service-prod"
+        }, {
+          "Name" : "Stage",
+          "Value" : {
+            "Ref" : "ApiRestApiDeploymentStageprodE828476C"
+          }
+        } ],
+        "EvaluationPeriods" : 1,
+        "MetricName" : "5XXError",
+        "Namespace" : "AWS/ApiGateway",
+        "Period" : 300,
+        "Statistic" : "Sum",
+        "Threshold" : 1,
+        "TreatMissingData" : "notBreaching"
+      },
+      "Type" : "AWS::CloudWatch::Alarm"
+    },
+    "MonitoringDeadLettersD99D287D" : {
+      "Properties" : {
+        "AlarmActions" : [ {
+          "Ref" : "MonitoringAlarmTopicAF62D4F1"
+        } ],
+        "AlarmDescription" : "A PersonCreated event was dead-lettered after all retries and needs replaying",
+        "ComparisonOperator" : "GreaterThanThreshold",
+        "Dimensions" : [ {
+          "Name" : "QueueName",
+          "Value" : {
+            "Fn::GetAtt" : [ "EventsDeadLetterQueueC3DB07E1", "QueueName" ]
+          }
+        } ],
+        "EvaluationPeriods" : 1,
+        "MetricName" : "ApproximateNumberOfMessagesVisible",
+        "Namespace" : "AWS/SQS",
+        "Period" : 300,
+        "Statistic" : "Maximum",
+        "Threshold" : 0,
+        "TreatMissingData" : "notBreaching"
+      },
+      "Type" : "AWS::CloudWatch::Alarm"
+    },
+    "MonitoringLambdaErrors07EF3732" : {
+      "Properties" : {
+        "AlarmActions" : [ {
+          "Ref" : "MonitoringAlarmTopicAF62D4F1"
+        } ],
+        "AlarmDescription" : "The function failed outside the handler: timeout, init failure or runtime crash",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "Dimensions" : [ {
+          "Name" : "FunctionName",
+          "Value" : {
+            "Ref" : "FunctionCreatePerson97C6A7D0"
+          }
+        } ],
+        "EvaluationPeriods" : 1,
+        "MetricName" : "Errors",
+        "Namespace" : "AWS/Lambda",
+        "Period" : 300,
+        "Statistic" : "Sum",
+        "Threshold" : 1,
+        "TreatMissingData" : "notBreaching"
+      },
+      "Type" : "AWS::CloudWatch::Alarm"
+    },
+    "MonitoringLambdaThrottlesFEA546C6" : {
+      "Properties" : {
+        "AlarmActions" : [ {
+          "Ref" : "MonitoringAlarmTopicAF62D4F1"
+        } ],
+        "AlarmDescription" : "Lambda throttled invocations; the API answered them with a 5XX",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "Dimensions" : [ {
+          "Name" : "FunctionName",
+          "Value" : {
+            "Ref" : "FunctionCreatePerson97C6A7D0"
+          }
+        } ],
+        "EvaluationPeriods" : 1,
+        "MetricName" : "Throttles",
+        "Namespace" : "AWS/Lambda",
+        "Period" : 300,
+        "Statistic" : "Sum",
+        "Threshold" : 1,
+        "TreatMissingData" : "notBreaching"
+      },
+      "Type" : "AWS::CloudWatch::Alarm"
+    },
+    "MonitoringPipeFailures8491CA47" : {
+      "Properties" : {
+        "AlarmActions" : [ {
+          "Ref" : "MonitoringAlarmTopicAF62D4F1"
+        } ],
+        "AlarmDescription" : "The Pipe failed to publish PersonCreated; it retries, then dead-letters",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "Dimensions" : [ {
+          "Name" : "PipeName",
+          "Value" : {
+            "Ref" : "EventsPersonCreatedPipe286558F8"
+          }
+        } ],
+        "EvaluationPeriods" : 1,
+        "MetricName" : "ExecutionFailed",
+        "Namespace" : "AWS/EventBridge/Pipes",
+        "Period" : 300,
+        "Statistic" : "Sum",
+        "Threshold" : 1,
+        "TreatMissingData" : "notBreaching"
+      },
+      "Type" : "AWS::CloudWatch::Alarm"
+    },
+    "MonitoringUnexpectedErrorsFE6313B8" : {
+      "Properties" : {
+        "AlarmActions" : [ {
+          "Ref" : "MonitoringAlarmTopicAF62D4F1"
+        } ],
+        "AlarmDescription" : "The handler answered with 500 Internal Server Error",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "Dimensions" : [ {
+          "Name" : "Service",
+          "Value" : "person-service-prod"
+        } ],
+        "EvaluationPeriods" : 1,
+        "MetricName" : "UnexpectedError",
+        "Namespace" : "PersonService",
+        "Period" : 300,
+        "Statistic" : "Sum",
+        "Threshold" : 1,
+        "TreatMissingData" : "notBreaching"
+      },
+      "Type" : "AWS::CloudWatch::Alarm"
+    },
     "StorageIdempotencyKeys35093AC8" : {
       "DeletionPolicy" : "Retain",
       "Properties" : {
@@ -650,7 +855,7 @@
     "StorageTablesKey006F3A78" : {
       "DeletionPolicy" : "Retain",
       "Properties" : {
-        "Description" : "Encrypts the Person Service tables and the event dead-letter queue",
+        "Description" : "Encrypts the Person Service tables, the event dead-letter queue and the alarm topic",
         "EnableKeyRotation" : true,
         "KeyPolicy" : {
           "Statement" : [ {
@@ -662,6 +867,25 @@
                   "Ref" : "AWS::AccountId"
                 }, ":root" ] ]
               }
+            },
+            "Resource" : "*"
+          }, {
+            "Action" : [ "kms:Decrypt", "kms:GenerateDataKey*" ],
+            "Condition" : {
+              "StringEquals" : {
+                "aws:SourceAccount" : {
+                  "Ref" : "AWS::AccountId"
+                },
+                "kms:ViaService" : {
+                  "Fn::Join" : [ "", [ "sns.", {
+                    "Ref" : "AWS::Region"
+                  }, ".amazonaws.com" ] ]
+                }
+              }
+            },
+            "Effect" : "Allow",
+            "Principal" : {
+              "Service" : "cloudwatch.amazonaws.com"
             },
             "Resource" : "*"
           } ],

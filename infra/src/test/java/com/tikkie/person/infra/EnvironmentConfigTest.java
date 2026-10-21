@@ -12,7 +12,7 @@ import software.amazon.awscdk.services.logs.RetentionDays;
 
 class EnvironmentConfigTest {
 
-    private static final AlarmThresholds THRESHOLDS = new AlarmThresholds(1, 1);
+    private static final AlarmThresholds THRESHOLDS = new AlarmThresholds(1, 1, 1, 1, 1);
     private static final Duration ARCHIVE_RETENTION = Duration.ofDays(7);
 
     @Test
@@ -143,9 +143,22 @@ class EnvironmentConfigTest {
     }
 
     @Test
-    void rejectsNegativeAlarmThresholds() {
-        assertThatIllegalArgumentException().isThrownBy(() -> new AlarmThresholds(-1, 1));
-        assertThatIllegalArgumentException().isThrownBy(() -> new AlarmThresholds(1, -1));
+    void rejectsAlarmThresholdsBelowOneBecauseAnAlarmAtZeroIsAlwaysInAlarm() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new AlarmThresholds(0, 1, 1, 1, 1));
+        assertThatIllegalArgumentException().isThrownBy(() -> new AlarmThresholds(1, 0, 1, 1, 1));
+        assertThatIllegalArgumentException().isThrownBy(() -> new AlarmThresholds(1, 1, 0, 1, 1));
+        assertThatIllegalArgumentException().isThrownBy(() -> new AlarmThresholds(1, 1, 1, 0, 1));
+        assertThatIllegalArgumentException().isThrownBy(() -> new AlarmThresholds(1, 1, 1, 1, 0));
+    }
+
+    @Test
+    void prodAlarmsOnTheFirstFailureOfEveryKind() {
+        assertThat(EnvironmentConfig.prod().alarmThresholds()).isEqualTo(new AlarmThresholds(1, 1, 1, 1, 1));
+    }
+
+    @Test
+    void devToleratesAFewUnexpectedErrorsAndServerErrorsButNoFunctionErrorsPipeFailuresOrThrottles() {
+        assertThat(EnvironmentConfig.dev().alarmThresholds()).isEqualTo(new AlarmThresholds(5, 5, 1, 1, 1));
     }
 
     private static EnvironmentConfig config(

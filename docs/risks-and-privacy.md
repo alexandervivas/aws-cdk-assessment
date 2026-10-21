@@ -20,5 +20,5 @@
 - `service/src/main/resources/log4j2.xml` holds the AWS SDK and HTTP client loggers at WARN even if Powertools changes log levels, because SDK request objects print attribute values.
 - The event carries no PII ([ADR 0002](adr/0002-thin-event.md)); the Pipe template reads five stream fields, pinned by a test.
 - API Gateway access logs hold request context only, never bodies (`PersonApi.ACCESS_LOG_FORMAT`). They do contain the caller's IAM ARN and source IP. Treat the log group as holding identities.
-- Tables and the dead-letter queue are encrypted with a customer-managed KMS key with rotation.
+- Tables, the dead-letter queue and the alarm topic are encrypted with a customer-managed KMS key with rotation.
 - All sample data in tests is fictional.

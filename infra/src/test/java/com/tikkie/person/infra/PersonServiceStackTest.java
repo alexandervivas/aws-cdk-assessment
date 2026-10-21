@@ -65,6 +65,15 @@ class PersonServiceStackTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"Dev", "Prod"})
+    void wiresTheAlarmsAndTheirTopicIntoEachStage(String stageId) {
+        Template template = Template.fromStack(stack(stageId));
+
+        template.resourceCountIs("AWS::CloudWatch::Alarm", 6);
+        template.resourceCountIs("AWS::SNS::Topic", 1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Dev", "Prod"})
     void allowsIamWildcardsOnlyForTheRecordedExceptions(String stageId) {
         Template template = Template.fromStack(stack(stageId));
         List<Map<String, Object>> statements = policyStatements(template);
