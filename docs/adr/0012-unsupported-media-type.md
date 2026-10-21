@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, 2026-10-21. Proposed during review; the owner can switch it to 400 without other changes.
+Accepted, 2026-10-21. Proposed during review and confirmed by the owner.
 
 ## Context
 
