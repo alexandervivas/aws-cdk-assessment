@@ -42,8 +42,9 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 | 2d | `p2d-item-mapper` | `PersonItemMapper` (person and key items, 24 h expiry, guarded read-back) | yes |
 | 2e | `p2e-dynamodb-repository` | `DynamoDbPersonRepository`: one `TransactWriteItems`, reason-code retries, deterministic 24 h window, client request token; DynamoDB Local tests; ADR 0011 | yes |
 | 2f | `p2f-concurrent-duplicates` | Concurrency test (convergence to one person) | yes |
-| 3a | `p3a-api-handler` | DTOs, `ProblemDetails` (RFC 9457), `CreatePersonHandler` status mapping, headers, correlation ID, `Idempotency-Key` UUID check | yes |
-| 3b | `p3b-observability` | Powertools logging/metrics/tracing (programmatic, no AspectJ); handler-to-DynamoDB-Local integration test; log output asserted PII-free | yes |
+| 3a | `p3a-api-support` | `ProblemDetails` (RFC 9457), `CorrelationId`, strict `Json` mapper, 415 problem type; ADR 0012 | yes |
+| 3b | `p3b-api-handler` | `CreatePersonHandler`: Content-Type, caller, `Idempotency-Key`, base64 body, status mapping, header precedence | yes |
+| 3c | `p3c-observability` | Powertools logging/metrics/tracing (programmatic), `ProductionWiring` with latency budget, telemetry-safe, PII guards | yes |
 | 4a | `p4a-stage-and-storage` | `PersonServiceApp`, `EnvironmentConfig`, `PersonServiceStage`, `PersonServiceStack`, `PersonStorage` + template tests | yes |
 | 4b | `p4b-lambda` | Lambda `java25` arm64 1024 MB, SnapStart, version + alias, log group, grants, reserved concurrency + tests | yes |
 | 4c | `p4c-rest-api` | `RestApi`, JSON Schema model, validator, IAM auth, throttling, access logs without bodies, X-Ray, alias integration, outputs, snapshot test; CI gains `npx cdk synth` | yes |
@@ -63,6 +64,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 - **`houseNumberAddition` is the only optional field.**
 - **`Idempotency-Key` must be a UUID.** Presence: API Gateway validator. Format: handler → 400 problem details.
 - **Request fingerprint** is computed over canonical normalised domain values in a fixed field order. Whitespace-only differences replay; semantic differences → 422.
+- **415 for non-JSON content types** (ADR 0012); API Gateway skips body validation for unmapped content types.
 - **Idempotency keys are scoped per caller** (IAM principal, STS session name stripped); key table partition key value is `<callerId>|<idempotencyKey>`. Owner decision, 2026-10-21.
 - **Request fingerprint: SHA-256 behind the `RequestFingerprinter` port for the MVP.** A KMS HMAC was rejected for cost, latency and an extra failure point per request; it is a roadmap item and a one-class swap. Canonical form `v1` + `\u001F`-joined normalised values. Owner decision, 2026-10-21 (ADR 0010).
 - **Key item stores `personId` and `createdAt`.** Replays never read Persons, so the Lambda keeps write-only access to Persons.
