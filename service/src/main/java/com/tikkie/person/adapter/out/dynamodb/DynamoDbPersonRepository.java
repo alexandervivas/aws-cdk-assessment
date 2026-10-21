@@ -123,9 +123,13 @@ public final class DynamoDbPersonRepository implements PersonRepository {
                 .filter(stored -> !stored.isExpiredAt(now));
     }
 
-    // A key holding our own candidate id means an earlier attempt of this very call committed.
+    // A key holding our own candidate id means an earlier attempt of this very call committed, so it must also
+    // hold our hash; anything else means the key item is corrupt, and neither replay nor conflict would be true.
     private static CreateOutcome outcomeFor(StoredKey stored, Person candidate, RequestHash hash) {
         if (stored.personId().equals(candidate.id())) {
+            if (!stored.requestHash().equals(hash)) {
+                throw new IllegalStateException("idempotency key item does not match its own write");
+            }
             return new CreateOutcome.Inserted();
         }
         return stored.requestHash().equals(hash)
