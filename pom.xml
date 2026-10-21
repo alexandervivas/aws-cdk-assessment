@@ -35,6 +35,7 @@
         <archunit.version>1.5.1</archunit.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <slf4j.version>2.0.17</slf4j.version>
+        <json-schema-validator.version>2.0.8</json-schema-validator.version>
 
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
@@ -136,6 +137,11 @@
                 <groupId>org.assertj</groupId>
                 <artifactId>assertj-core</artifactId>
                 <version>${assertj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${json-schema-validator.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.tngtech.archunit</groupId>

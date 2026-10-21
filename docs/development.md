@@ -22,8 +22,8 @@ What each level covers (levels follow `docs/plan.md` §8):
 | Architecture | `domain` has no AWS, Jackson or adapter dependency | `service/src/test/.../ArchitectureTest.java` |
 | Integration | Repository against DynamoDB Local: create, replay, key reuse, concurrent duplicates, mapper | `service/src/test/.../adapter/out/dynamodb` |
 | Infrastructure | Template assertions per construct (storage, function, permissions, API, events, monitoring, log data protection), stage and app wiring, cdk-nag with zero unacknowledged findings, snapshots of Dev and Prod | `infra/src/test/...` |
-| End-to-end | Test-only `E2eSupportStack` (template tests in `E2eSupportStackTest`); the tests themselves are planned, see Status | `e2e/` (module exists, tests skipped) |
-| Load | Planned, see Status | none yet |
+| End-to-end | Against a deployed Dev stage: create, replay, key reuse, validation, missing key, header casing, content types, and the `PersonCreated` event (schema, no personal data). Skipped unless pointed at a stack; see [Run the end-to-end tests](#run-the-end-to-end-tests). Test-only `E2eSupportStack` template tests in `E2eSupportStackTest` | `e2e/src/test/...` |
+| Load | k6, ramping arrival rate, p95 under 1 s and under 1 % failed requests; see [Run the load test](#run-the-load-test) | `load/k6/create-person.js` |
 
 CI (`.github/workflows/ci.yml`) runs `npm ci`, `./mvnw -B verify`, `npx cdk synth`, and uploads the templates from `cdk.out` as an artifact.
 
@@ -61,3 +61,40 @@ npx cdk deploy E2eSupportStack -c e2e=true -c devAccount=<dev-account-id> -c pro
 ```
 
 Destroy `E2eSupportStack` before `Dev/*`. The stack outputs `QueueUrl`, which the end-to-end tests read as `E2E_QUEUE_URL`. Remove it with `npx cdk destroy E2eSupportStack -c e2e=true` with the same account context.
+
+## Run the end-to-end tests
+
+The tests in `e2e/` call a deployed Dev stage and read its events from the `E2eSupportStack` queue. They run only with the Maven profile `e2e` and only when both `E2E_API_URL` and `E2E_QUEUE_URL` are set. Otherwise a JUnit assumption skips them, so `./mvnw verify` and CI never need AWS.
+
+Deploy `Dev/*` and `E2eSupportStack` first (see above), then take the URLs from the stack outputs:
+
+```bash
+export AWS_REGION=eu-west-1
+export E2E_API_URL=$(aws cloudformation describe-stacks --stack-name Dev-PersonService \
+  --query "Stacks[0].Outputs[?starts_with(OutputKey, 'ApiRestApiEndpoint')].OutputValue" --output text)
+export E2E_QUEUE_URL=$(aws cloudformation describe-stacks --stack-name E2eSupportStack \
+  --query "Stacks[0].Outputs[?OutputKey=='QueueUrl'].OutputValue" --output text)
+./mvnw verify -Pe2e -pl e2e -am
+```
+
+- Requests are signed with SigV4 using the default AWS credentials chain (environment, profile, SSO). The caller needs `execute-api:Invoke` on `POST /person`, and `sqs:ReceiveMessage` and `sqs:DeleteMessage` on the queue.
+- Every test uses a new `Idempotency-Key` and fictional data, so each run creates a few persons in Dev.
+- The event test waits up to 60 s for `PersonCreated` with the returned `personId`, checks it against `docs/events/person-created.v1.json`, checks that none of the request's personal values appear in it, and deletes it. Other messages stay in the queue until they expire after a day. After a load test, purge the queue first (`aws sqs purge-queue --queue-url "$E2E_QUEUE_URL"`), or the poll has to read through the backlog.
+- `HTTP/1.1` is used on purpose, so the lower-case `idempotency-key` test sends the header exactly as written.
+- A request without `Content-Type` only has to get a 4xx. ADR 0012 expects 415 from the handler, but API Gateway may treat the request differently before it gets there. The test logs the observed status; record it in [Status](roadmap.md#status) after the first run.
+
+## Run the load test
+
+Run it only in the dedicated Dev account ([ADR 0014](adr/0014-account-level-apigateway-logging-role.md)), never against Prod. Every request creates a person, writes two DynamoDB items and publishes an event, so a run costs money and fills the tables, the bus archive and the end-to-end queue.
+
+`load/k6/create-person.js` ramps to `RATE` requests per second over 30 s and holds it for `DURATION`. It fails if the 95th percentile is 1 s or more, or if 1 % or more of the requests return anything other than 201. Dev throttles at 10 requests per second with a burst of 20 (`EnvironmentConfig.dev()`), so a `RATE` above 10 shows up as 429s and failed thresholds.
+
+k6 signs the requests itself with the jslib AWS signature module (`https://jslib.k6.io/aws/0.12.3/signature.js`, pinned). It reads credentials from environment variables only, not from profiles:
+
+```bash
+eval "$(aws configure export-credentials --format env)"
+export AWS_REGION=eu-west-1
+k6 run -e API_URL="$E2E_API_URL" -e RATE=8 -e DURATION=2m load/k6/create-person.js
+```
+
+Without a local k6, use the image: `docker run --rm -i -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION grafana/k6:1.3.0 run --include-system-env-vars -e API_URL="$E2E_API_URL" - < load/k6/create-person.js`.
