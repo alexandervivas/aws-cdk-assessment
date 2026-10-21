@@ -18,7 +18,7 @@ Most findings follow from decisions already recorded. Two follow from choices no
 - **No WAF (`AwsSolutions-APIG3`).** Every request must carry a valid SigV4 signature from an IAM principal (ADR 0006), and the stage is throttled (ADR 0005). A web ACL adds a monthly fee per stage and per rule, for traffic that IAM already rejects.
 - **No execution logging (`AwsSolutions-APIG6`).** API Gateway execution logs at `ERROR` level include body validation messages, and those can quote request values, which may be personal data. The execution log group is created by API Gateway, not by the stack, so the data protection policy can't cover it. Access logs stay on, without bodies.
 
-The acknowledged findings, the same in Dev and Prod:
+The acknowledged findings, the same in Dev and Prod (the last row only in the test-only `E2eSupportStack`):
 
 | Finding | Where | Why | ADR |
 |---------|-------|-----|-----|
@@ -30,6 +30,7 @@ The acknowledged findings, the same in Dev and Prod:
 | `APIG6` | API stage | No execution logs, see above | 0015 |
 | `COG4` | `POST /person` | IAM authorisation, not Cognito | 0006 |
 | `SQS3` | Dead-letter queue | It is the Pipe's dead-letter queue. cdk-nag recognises only SQS and Lambda dead-letter settings | 0001 |
+| `SQS3` | End-to-end test queue (`E2eSupportStack`, only with `-c e2e=true`) | A test sink. A message nobody reads expires after a day, and a dead-letter queue would hold nothing worth redriving | 0015 |
 
 ## Consequences
 

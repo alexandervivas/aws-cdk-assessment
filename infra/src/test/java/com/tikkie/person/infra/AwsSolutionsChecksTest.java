@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.PolicyViolatingResource;
 import software.amazon.awscdk.PolicyViolation;
@@ -23,9 +25,10 @@ import software.constructs.MetadataEntry;
 
 class AwsSolutionsChecksTest {
 
-    @Test
-    void bothStagesHaveNoUnacknowledgedFindings() {
-        App app = appWithStages();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void theAppHasNoUnacknowledgedFindings(boolean e2e) {
+        App app = app(e2e);
 
         List<PolicyViolation> violations = new AwsSolutionsChecks(app).validateScope(app).getViolations();
 
@@ -34,14 +37,20 @@ class AwsSolutionsChecksTest {
 
     @Test
     void acknowledgesOnlyTheRecordedFindingsWhereTheyArise() {
-        assertThat(acknowledgements(appWithStages()).keySet()).containsExactlyInAnyOrderElementsOf(
-                Stream.of("Dev", "Prod").flatMap(AwsSolutionsChecksTest::expectedAcknowledgements).toList());
+        assertThat(acknowledgements(app(false)).keySet()).containsExactlyInAnyOrderElementsOf(stageAcknowledgements());
+    }
+
+    @Test
+    void theE2eSupportStackAddsOnlyItsQueueAcknowledgement() {
+        assertThat(acknowledgements(app(true)).keySet()).containsExactlyInAnyOrderElementsOf(Stream.concat(
+                stageAcknowledgements().stream(), Stream.of("E2eSupportStack/Queue AwsSolutions-SQS3")).toList());
     }
 
     // An acknowledgement on the App or a Stage would hide a finding on every resource below it.
-    @Test
-    void theAppAndItsStagesCarryNoAcknowledgements() {
-        App app = appWithStages();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void theAppAndItsStagesCarryNoAcknowledgements(boolean e2e) {
+        App app = app(e2e);
         List<IConstruct> appAndStages = Stream.concat(Stream.of(app), app.getNode().getChildren().stream()
                 .filter(Stage::isStage)).toList();
 
@@ -50,16 +59,18 @@ class AwsSolutionsChecksTest {
                 .doesNotContain(Validations.ACKNOWLEDGED_RULES_METADATA_KEY));
     }
 
-    @Test
-    void everyAcknowledgementCitesAnAdr() {
-        assertThat(acknowledgements(appWithStages()).values())
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void everyAcknowledgementCitesAnAdr(boolean e2e) {
+        assertThat(acknowledgements(app(e2e)).values())
                 .isNotEmpty()
                 .allSatisfy(reason -> assertThat(reason).containsPattern("ADR \\d{4}"));
     }
 
-    @Test
-    void synthesisesTheAppWithTheChecksRegistered() {
-        App app = appWithStages();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void synthesisesTheAppWithTheChecksRegistered(boolean e2e) {
+        App app = app(e2e);
         PersonServiceApp.checkAwsSolutions(app);
 
         assertThatNoException().isThrownBy(app::synth);
@@ -107,8 +118,12 @@ class AwsSolutionsChecksTest {
         new Queue(stack, "QueueWithoutDeadLetterQueue");
     }
 
-    private static App appWithStages() {
-        App app = withCdkJsonContext();
+    private static List<String> stageAcknowledgements() {
+        return Stream.of("Dev", "Prod").flatMap(AwsSolutionsChecksTest::expectedAcknowledgements).toList();
+    }
+
+    private static App app(boolean e2e) {
+        App app = withCdkJsonContext(Map.of("e2e", String.valueOf(e2e)));
         PersonServiceApp.addStages(app, Map.of());
         return app;
     }

@@ -6,12 +6,12 @@ import software.constructs.IConstruct;
 
 // cdk-nag 3 reads CDK acknowledgements. A finding id such as AwsSolutions-IAM5[Resource::*] acknowledges that one
 // finding on this construct and its children, nothing broader.
-final class NagAcknowledgements {
+public final class NagAcknowledgements {
 
     private NagAcknowledgements() {
     }
 
-    static void acknowledge(IConstruct construct, String findingId, String reason) {
+    public static void acknowledge(IConstruct construct, String findingId, String reason) {
         Validations.of(construct).acknowledge(Acknowledgment.builder().id(findingId).reason(reason).build());
     }
 
