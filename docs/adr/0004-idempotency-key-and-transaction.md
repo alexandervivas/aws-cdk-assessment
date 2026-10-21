@@ -8,7 +8,7 @@ Clients retry after timeouts. A retry must not create a second person or a secon
 
 ## Decision
 
-- The caller sends `Idempotency-Key`, a UUID. API Gateway requires the header. The handler checks the format and answers 400 otherwise (`application/IdempotencyKey.java`).
+- The caller sends `Idempotency-Key`, a UUID. The handler alone checks presence and format, with a case-insensitive header lookup, and answers 400 problem details otherwise (ADR [0005](0005-rest-api.md)) (`application/IdempotencyKey.java`).
 - One `TransactWriteItems` writes the person and an IdempotencyKeys item, each with a condition, so both exist or neither does.
 - A key seen again with the same request fingerprint replays the original `201` with `Idempotent-Replayed: true`. With a different fingerprint the answer is `422`.
 - Keys expire after 24 h (`expiresAt`, DynamoDB TTL, plus a read-time check).

@@ -10,13 +10,14 @@ Creating a person must persist it and emit `PersonCreated`. Doing both from the 
 
 The table write is the only write. The Persons table has a stream with `NEW_IMAGE` (`infra/.../constructs/PersonStorage.java`). An EventBridge Pipe reads it, keeps `INSERT` records only, rewrites each into a thin event with an input template and puts it on the bus `person-events-{stage}` (`infra/.../constructs/PersonEvents.java`). The Lambda has no `PutEvents` permission and no publishing code.
 
-- The pipe starts at `LATEST`, uses batch size 1 and retries a record up to 10 times.
+- The pipe starts at `LATEST`, uses batch size 1 with parallelization factor 10, and retries a record up to 10 times or for 6 h, whichever comes first.
 - A record that still fails goes to a KMS-encrypted SQS dead-letter queue, kept 14 days.
 - Idempotent writes (ADR [0011](0011-idempotent-write-semantics.md)) keep a replayed request out of the stream, so a replay never produces a second event.
 
 ## Consequences
 
-- Every committed insert is followed by an event, at least once. Consumers must deduplicate on `metadata.eventId`.
+- A committed insert is followed by an event, at least once, while the pipe runs. Consumers must deduplicate on `metadata.eventId`.
+- Two gaps are possible. An insert made before the pipe first reaches RUNNING (it starts at `LATEST`) gets no event. A record that still fails after its retries is dead-lettered and needs manual re-emission (README, operations notes).
 - Latency from write to event is higher than a direct `PutEvents`, by the stream and Pipe delay.
 - A failing event is visible in the dead-letter queue instead of being lost in the Lambda.
 - `UPDATE` and `REMOVE` records exist in the stream but are filtered out. Adding more event types means new filters and templates.

@@ -10,7 +10,7 @@ This section is the design at a glance, and it is kept current. Every change to 
 
 | # | Decision | Why | Rejected alternative | ADR |
 |---|----------|-----|----------------------|-----|
-| 1 | Derive `PersonCreated` from the DynamoDB stream through an EventBridge Pipe (outbox through change data capture) | The table write is the only write. Every committed insert produces an event, and the Lambda has no publishing code. | Lambda writes the person, then calls `PutEvents`: a partial failure leaves a person without an event | [0001](docs/adr/0001-outbox-via-streams-and-pipes.md) |
+| 1 | Derive `PersonCreated` from the DynamoDB stream through an EventBridge Pipe (outbox through change data capture) | The table write is the only write. Every committed insert produces an event at least once, except in the first-deploy window before the pipe runs. A record that fails for 6 h is dead-lettered and needs the manual recovery in the operations notes, and the Lambda has no publishing code. | Lambda writes the person, then calls `PutEvents`: a partial failure leaves a person without an event | [0001](docs/adr/0001-outbox-via-streams-and-pipes.md) |
 | 2 | Thin event: `personId` and metadata, no PII | Personal data never leaves the service, GDPR erasure stays possible, and consumers decide what they need | Fat event carrying the whole person | [0002](docs/adr/0002-thin-event.md) |
 | 3 | Synchronous `201 Created` | The client gets the id and validation errors immediately | API → SQS → Lambda with `202` | [0003](docs/adr/0003-synchronous-created.md) |
 | 4 | Idempotency through an `Idempotency-Key` header and one DynamoDB transaction (person and key) | Retries are safe, and a duplicate never reaches the stream, so it never produces a duplicate event | Powertools idempotency (needs AspectJ); payload hashing as the key | [0004](docs/adr/0004-idempotency-key-and-transaction.md) |
@@ -55,7 +55,7 @@ Request: headers `Content-Type: application/json` and `Idempotency-Key: <UUID>` 
 | 422 | Same key used with a different request. | `/problems/idempotency-key-reused` |
 | 500 | Unexpected failure. Body has the correlation ID, no stack trace and no input. | `/problems/internal-error` |
 
-Problem bodies follow RFC 9457 and are built in `service/src/main/java/com/tikkie/person/adapter/in/api/ProblemDetails.java`. Every response carries `X-Correlation-Id`.
+Problem bodies follow RFC 9457 and are built in `service/src/main/java/com/tikkie/person/adapter/in/api/ProblemDetails.java`. Every response from the handler carries `X-Correlation-Id`. Responses that API Gateway returns itself (IAM rejection, schema validation, throttling) don't carry it.
 
 ## Trade-offs and accepted risks
 
@@ -66,7 +66,7 @@ Problem bodies follow RFC 9457 and are built in `service/src/main/java/com/tikki
 | IAM wildcards | Three: X-Ray write actions on `*` (no resource-level support), the function's own log group with its `:*` stream suffix, and KMS `ReEncrypt*` and `GenerateDataKey*` on one key. A test fails on any other wildcard. `grant*` also gives more DynamoDB actions than the code uses. A fourth exception is the AWS managed policy on the API Gateway logging role. | [0013](docs/adr/0013-iam-wildcard-exceptions.md), [0014](docs/adr/0014-account-level-apigateway-logging-role.md) |
 | Clock skew at 24 h | Lambda clocks differ by under a second. In that window two concurrent identical requests can both create a person: one sees the key as live, the other as expired. Stored `expiresAt` is whole seconds, so the window is 24 h minus up to 999 ms. | [0011](docs/adr/0011-idempotent-write-semantics.md) |
 | Conflict path testing | DynamoDB Local serialises transactions, so the race loser always sees `ConditionalCheckFailed`. The concurrent-duplicates test proves one person is created. Transaction conflict, throttling and lost-response paths are proven with scripted tests that intercept the client, not real contention. | [0011](docs/adr/0011-idempotent-write-semantics.md) |
-| Lambda `Errors` never fires | The handler turns every failure into a response, so the Lambda `Errors` metric stays at zero. The handler emits its own `UnexpectedError` metric for 500s (`Outcome.java`). Alarms must use it, and the API `5XXError` metric. | `service/.../adapter/in/api/Outcome.java` |
+| Two error signals | The handler turns application failures into 500 responses, so the Lambda `Errors` metric does not count them. It emits its own `UnexpectedError` metric for those (`Outcome.java`). Lambda `Errors` still counts timeouts (10 s), init failures and runtime crashes, so monitoring covers both. |
 | Cold start | SnapStart shortens cold starts but restore time remains. The Powertools `cold_start` log field is always false under SnapStart, so it cannot be used to count cold starts. | [0008](docs/adr/0008-java-and-snapstart.md), `CreatePersonHandler.java` |
 | At-least-once events | The Pipe delivers at least once. Consumers deduplicate on `metadata.eventId`. | [0001](docs/adr/0001-outbox-via-streams-and-pipes.md) |
 
@@ -135,6 +135,7 @@ Callers sign requests with SigV4 for service `execute-api` and need `execute-api
   2. After 24 h the stream has trimmed. Find the affected persons by scanning Persons over the `createdAt` window of the failure and re-emit.
   3. Consumers deduplicate on `metadata.eventId`, so re-emitting twice is safe. A manual re-emit carries a new `eventId`, so consumers should also be idempotent on `personId` for `PersonCreated`.
 - **Correlation id.** The correlation id is caller-supplied (`X-Correlation-Id`) and is broadcast and archived with every event. Callers must not put personal data in it.
+- **Record age.** A record that keeps failing is dead-lettered after 6 h. The stream then still holds it for 18 h, so the runbook's first step applies.
 - **Throughput.** Batch size 1 with `ParallelizationFactor` 10 per stream shard. That keeps up with the prod API rate without reordering a single person's records.
 
 ## Scaling notes
@@ -142,7 +143,7 @@ Callers sign requests with SigV4 for service `execute-api` and need `execute-api
 - Both tables are on-demand, so there is no capacity to plan. A new table's on-demand limits start modest and grow with traffic. Warm throughput for prod is a roadmap item.
 - Throttling and concurrency are linked. `EnvironmentConfig` refuses a config where the API burst limit exceeds the Lambda reserved concurrency, because the excess would be throttled by Lambda and reach clients as a 5XX instead of a 429. Prod: rate 100, burst 100, reserved concurrency 100. Dev: rate 10, burst 20, no reservation.
 - Latency budget: repository work stops starting new calls after 6 s, each DynamoDB call is capped at 2 s (1 s per attempt, 2 attempts), and the Lambda times out at 10 s. API Gateway's limit is 29 s (`ProductionWiring.java`, `PersonFunction.java`).
-- Event path: the Pipe uses batch size 1, so one failing record is retried and dead-lettered alone and a retry never republishes delivered records. The code does not set a parallelization factor, so the Pipes default applies and ordering per shard is kept. Raise batch size or parallelization only if the stream falls behind, and then check the consumers' idempotency (`PersonEvents.java`).
+- Event path: the Pipe uses batch size 1, so one failing record is retried and dead-lettered alone and a retry never republishes delivered records. `ParallelizationFactor` is 10, so ordering is kept per person, not across a whole shard, which is all one `PersonCreated` per person needs. If the stream still falls behind, raise the batch size and check the consumers' idempotency (`PersonEvents.java`).
 - The Persons table is a single-region `TableV2`. Its stream uses `NEW_IMAGE`. Before adding a replica to make it a global table, change the stream to `NEW_AND_OLD_IMAGES`, which global tables require, and check that the Pipe filter still sees one `INSERT` per person.
 - The dead-letter queue keeps messages 14 days.
 

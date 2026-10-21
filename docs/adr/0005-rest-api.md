@@ -4,14 +4,14 @@ Status: Accepted, 2026-10-21. Refined by [0012](0012-unsupported-media-type.md).
 
 ## Context
 
-The contract rejects malformed bodies and missing headers before the Lambda runs, requires IAM auth, and needs throttling per stage.
+The contract rejects bodies that break the schema before the Lambda runs, requires IAM auth, and needs throttling per stage.
 
 ## Decision
 
 `PersonApi` (`infra/.../constructs/PersonApi.java`) builds a regional REST API with:
 
-- a JSON Schema model for `application/json` and a validator for body and parameters (`PersonRequestModel.java`), with `additionalProperties: false` and max lengths;
-- the `Idempotency-Key` header marked required;
+- a JSON Schema model for `application/json` and a validator for the body only (`PersonRequestModel.java`), with `additionalProperties: false` and max lengths;
+- no required gateway parameters: the handler enforces `Idempotency-Key`;
 - stage throttling from `EnvironmentConfig`, X-Ray tracing and access logs without bodies;
 - a Lambda proxy integration on the `live` alias.
 
