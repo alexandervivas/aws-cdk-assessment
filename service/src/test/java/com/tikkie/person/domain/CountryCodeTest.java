@@ -1,6 +1,7 @@
 package com.tikkie.person.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.stream.Stream;
@@ -34,9 +35,18 @@ class CountryCodeTest {
         return Stream.of(
                 Arguments.of(null, "required"),
                 Arguments.of(" ", "required"),
+                Arguments.of("\u00A0", "required"),
                 Arguments.of("nl", "invalid_format"),
                 Arguments.of("NLD", "invalid_format"),
                 Arguments.of("XX", "unknown_country"),
                 Arguments.of("ZZ", "unknown_country"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"nl", "XX"})
+    void constructorRejectsInvalidCodeWithoutEchoingIt(String raw) {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new CountryCode(raw))
+                .withMessageNotContaining(raw);
     }
 }

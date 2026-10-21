@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
+// Values captured after a failure are null; call throwIfAny() before using any of them.
 public final class FieldErrors {
 
     private final List<FieldError> errors = new ArrayList<>();

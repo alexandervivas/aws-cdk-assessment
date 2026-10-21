@@ -35,6 +35,7 @@ Invoke this skill when a phase starts, and re-read it after compaction before to
 | 0a | `p0a-skeleton` | Multi-module Maven skeleton, wrapper, toolchain pins, CI, this skill, agents | no |
 | 1a | `p1a-names-and-sensitive` | `Sensitive<T>`, `FieldError`, `ValidationException`, `PersonName`, `CountryCode` + unit tests | no |
 | 1b | `p1b-phone-address-person` | `PhoneNumber` (E.164), `PostalCode` (NL normalised), `Address`, `PersonId`, `Person` (masked `toString`), ArchUnit test | no |
+| 1c | `p1c-domain-hardening` | Review hardening for 1a/1b: record invariants, Address.parse, named limits, control chars, NL ASCII postal, phone letters/extensions, PersonId validation, ArchUnit allow-list, missing tests | no |
 | 2a | `p2a-create-person-use-case` | `CreatePersonCommand`, `CreatePersonResult` (`Created`/`Replayed`), `IdempotencyKey`, `RequestHash`, `PersonRepository` port with sealed `CreateOutcome` (`Created`, `ReplayOf`, `Conflict`), `CreatePersonUseCase`, in-memory fake + tests | yes |
 | 2b | `p2b-dynamodb-repository` | `DynamoDbPersonRepository` with `TransactWriteItems`, TTL 24 h, retry-once on non-key cancellation; Testcontainers: create, replay, conflict, concurrent duplicates | yes |
 | 3a | `p3a-api-handler` | DTOs, `ProblemDetails` (RFC 9457), `CreatePersonHandler` status mapping, headers, correlation ID, `Idempotency-Key` UUID check | yes |

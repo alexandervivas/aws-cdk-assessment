@@ -1,6 +1,7 @@
 package com.tikkie.person.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
@@ -39,6 +40,11 @@ class PersonNameTest {
     }
 
     @Test
+    void stripsSurroundingNoBreakSpaces() {
+        assertThat(PersonName.parse(FIELD, "\u00A0Anna\u00A0").value().reveal()).isEqualTo("Anna");
+    }
+
+    @Test
     void acceptsExactlyMaximumLength() {
         assertThat(PersonName.parse(FIELD, "a".repeat(100)).value().reveal()).hasSize(100);
     }
@@ -58,6 +64,7 @@ class PersonNameTest {
                 Arguments.of(null, "required"),
                 Arguments.of("", "required"),
                 Arguments.of("   ", "required"),
+                Arguments.of("\u00A0", "required"),
                 Arguments.of("a".repeat(101), "too_long"),
                 Arguments.of("Anna1", "invalid_characters"),
                 Arguments.of("<script>", "invalid_characters"),
@@ -69,6 +76,11 @@ class PersonNameTest {
         assertThatThrownBy(() -> PersonName.parse("lastName", null))
                 .isInstanceOfSatisfying(ValidationException.class, e ->
                         assertThat(e.errors().getFirst().field()).isEqualTo("lastName"));
+    }
+
+    @Test
+    void constructorRejectsDisallowedCharacters() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new PersonName(Sensitive.of("Anna1")));
     }
 
     @Test
