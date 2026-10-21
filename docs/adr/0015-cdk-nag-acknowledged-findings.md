@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed, 2026-10-21, in phase 6b. It becomes Accepted when the owner approves the PR.
+Accepted, 2026-10-21. Proposed in phase 6b and confirmed by the owner: no WAF, no API Gateway execution logging.
 
 ## Context
 
