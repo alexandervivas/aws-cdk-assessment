@@ -870,18 +870,6 @@
             "Resource" : "*"
           }, {
             "Action" : [ "kms:Decrypt", "kms:GenerateDataKey*" ],
-            "Condition" : {
-              "StringEquals" : {
-                "aws:SourceAccount" : {
-                  "Ref" : "AWS::AccountId"
-                },
-                "kms:ViaService" : {
-                  "Fn::Join" : [ "", [ "sns.", {
-                    "Ref" : "AWS::Region"
-                  }, ".amazonaws.com" ] ]
-                }
-              }
-            },
             "Effect" : "Allow",
             "Principal" : {
               "Service" : "cloudwatch.amazonaws.com"

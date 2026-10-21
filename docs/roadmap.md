@@ -28,4 +28,5 @@ The alarms are built ([operations](operations.md#alarms)). Until 6b, the log gro
 - Per-caller rate limits, for example usage plans or a per-principal limit ([0006](adr/0006-iam-authentication.md)).
 - Hand-written, tighter DynamoDB statements instead of `grant*` ([0013](adr/0013-iam-wildcard-exceptions.md)).
 - Revisit explicit KMS actions after the first real deploy ([0013](adr/0013-iam-wildcard-exceptions.md)).
+- After the first deploy, verify alarm delivery with `aws cloudwatch set-alarm-state`, then try re-adding `aws:SourceAccount` to CloudWatch's key grant ([0013](adr/0013-iam-wildcard-exceptions.md)).
 - Switch 415 to 400 if the owner prefers ([0012](adr/0012-unsupported-media-type.md)).

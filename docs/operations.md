@@ -14,7 +14,7 @@
 
 ## Alarms
 
-`infra/src/main/java/com/tikkie/person/infra/constructs/PersonMonitoring.java` creates six alarms per stage. Each one evaluates a single five-minute period, treats missing data as not breaching, and notifies one SNS topic. The topic is encrypted with the stage key, accepts only TLS, has no subscriptions committed, and its ARN is a stack output. Only CloudWatch alarms of the same account may publish to it, and CloudWatch may use the stage key only through SNS in that account. Thresholds come from `EnvironmentConfig.alarmThresholds` (dev / prod).
+`infra/src/main/java/com/tikkie/person/infra/constructs/PersonMonitoring.java` creates six alarms per stage. Each one evaluates a single five-minute period, treats missing data as not breaching, and notifies one SNS topic. The topic is encrypted with the stage key, accepts only TLS, has no subscriptions committed, and its ARN is a stack output. Only CloudWatch alarms of the same account may publish to it: the topic policy's `aws:SourceAccount` and `aws:SourceArn` conditions are the scoping gate. The stage key grants CloudWatch `kms:Decrypt` and `kms:GenerateDataKey*` without conditions, per AWS's documented statement, because a condition key missing from CloudWatch's KMS request context would silently drop every notification. The residual confused-deputy risk is bounded: no data becomes readable, because SNS binds the ciphertext to the topic. Thresholds come from `EnvironmentConfig.alarmThresholds` (dev / prod).
 
 | Alarm | Metric | Fires when | Means |
 |-------|--------|------------|-------|

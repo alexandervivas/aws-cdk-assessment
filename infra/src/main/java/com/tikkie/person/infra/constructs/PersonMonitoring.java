@@ -66,7 +66,7 @@ public final class PersonMonitoring extends Construct {
         CfnOutput.Builder.create(this, "AlarmTopicArn").value(alarmTopic.getTopicArn()).build();
     }
 
-    // Not grantPublish: it would also grant the key with the topic's conditions instead of kms:ViaService.
+    // Not grantPublish: it would leave the topic statement without the source account and alarm ARN conditions.
     private void allowCloudWatchAlarmsToPublish(PersonStorage storage) {
         alarmTopic.addToResourcePolicy(PolicyStatement.Builder.create()
                 .sid("AllowThisAccountsCloudWatchAlarms")
@@ -78,13 +78,13 @@ public final class PersonMonitoring extends Construct {
                         "ArnLike", Map.of("aws:SourceArn",
                                 "arn:" + Aws.PARTITION + ":cloudwatch:" + Aws.REGION + ":" + Aws.ACCOUNT_ID + ":alarm:*")))
                 .build());
+        // AWS's documented statement, unconditioned on purpose: sources disagree on whether kms:ViaService and
+        // aws:SourceAccount reach CloudWatch's KMS request context, and if either is missing every alarm fires but
+        // no notification is delivered. The topic policy above is the gate that keeps other accounts' alarms out.
         storage.encryptionKey().addToResourcePolicy(PolicyStatement.Builder.create()
                 .principals(List.of(CLOUDWATCH))
                 .actions(List.of("kms:Decrypt", "kms:GenerateDataKey*"))
                 .resources(List.of("*"))
-                .conditions(Map.of("StringEquals", Map.of(
-                        "kms:ViaService", "sns." + Aws.REGION + ".amazonaws.com",
-                        "aws:SourceAccount", Aws.ACCOUNT_ID)))
                 .build());
     }
 
