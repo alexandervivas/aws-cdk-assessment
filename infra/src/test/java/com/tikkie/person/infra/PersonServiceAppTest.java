@@ -173,8 +173,7 @@ class PersonServiceAppTest {
 
     @Test
     void synthesisesBothStagesOffline() {
-        // CloudFormation rejects a template without resources, and the stack stays empty until storage is added.
-        App app = withCdkJsonContext(Map.of("@aws-cdk/core:validateAgainstDefaultRules", false));
+        App app = withCdkJsonContext();
         PersonServiceApp.addStages(app, Map.of());
 
         assertThat(app.synth().getNestedAssemblies()).hasSize(2);
