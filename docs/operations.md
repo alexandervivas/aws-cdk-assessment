@@ -30,6 +30,25 @@
 - `PipeFailures` is a warning, because it may count retried attempts as well as final failures. `DeadLetters` is the actionable alarm.
 - `DeadLetters` stays in ALARM while any message waits in the queue, so new dead letters in that time don't notify again. Drain the queue with the dead-letter queue runbook above to re-arm it.
 
+## cdk-nag acknowledgements
+
+`PersonServiceApp` registers cdk-nag `AwsSolutionsChecks` as a CDK policy validation plugin, so `cdk synth` and the build fail on any finding that isn't acknowledged, and the error names the finding. The app fails synthesis itself, because the CLI would otherwise count only findings in the stacks it selected, and a bare `cdk synth` selects none in this stages-only app ([0015](adr/0015-cdk-nag-acknowledged-findings.md)). Each acknowledgement names one finding on the construct that causes it, and its reason cites an ADR. `AwsSolutionsChecksTest` pins the list:
+
+| Finding | Where | Reason |
+|---------|-------|--------|
+| `IAM5[Resource::*]` | Function role | X-Ray write actions have no resource-level permissions ([0013](adr/0013-iam-wildcard-exceptions.md)) |
+| `IAM5[Action::kms:GenerateDataKey*]`, `IAM5[Action::kms:ReEncrypt*]` | Function and Pipe roles | KMS grants on the stage key ([0013](adr/0013-iam-wildcard-exceptions.md)) |
+| `IAM4` `AmazonAPIGatewayPushToCloudWatchLogs` | API Gateway logging role | Account-level logging role ([0014](adr/0014-account-level-apigateway-logging-role.md)) |
+| `APIG2` | REST API | Bodies are validated; the handler alone enforces `Idempotency-Key` ([0005](adr/0005-rest-api.md)) |
+| `APIG3` | API stage | No WAF ([0015](adr/0015-cdk-nag-acknowledged-findings.md)) |
+| `APIG6` | API stage | No execution logs, which can quote personal data ([0015](adr/0015-cdk-nag-acknowledged-findings.md)) |
+| `COG4` | `POST /person` | IAM authorisation ([0006](adr/0006-iam-authentication.md)) |
+| `SQS3` | Dead-letter queue | It is the Pipe's dead-letter queue ([0001](adr/0001-outbox-via-streams-and-pipes.md)) |
+
+To acknowledge a new finding, note that CDK's error hint prints the id as `AwsSolutions::AwsSolutions-XXX`. The id that works is `AwsSolutions-XXX`, optionally with a finding in brackets, such as `AwsSolutions-IAM5[Resource::*]`.
+
+`DDB3` doesn't fire although Dev has point-in-time recovery off, because the rule checks only `AWS::DynamoDB::Table`, not the `GlobalTable` that `TableV2` creates. `PersonStorageTest` pins PITR per stage.
+
 ## Scaling notes
 
 - Both tables are on-demand, so there is no capacity to plan. A new table's on-demand limits start modest and grow with traffic. Warm throughput for prod is a roadmap item.

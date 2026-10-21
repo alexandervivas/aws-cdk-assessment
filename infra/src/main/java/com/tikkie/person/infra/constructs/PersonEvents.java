@@ -1,5 +1,8 @@
 package com.tikkie.person.infra.constructs;
 
+import static com.tikkie.person.infra.constructs.NagAcknowledgements.acknowledge;
+import static com.tikkie.person.infra.constructs.NagAcknowledgements.acknowledgeStageKeyPrefixActions;
+
 import com.tikkie.person.infra.EnvironmentConfig;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +82,11 @@ public final class PersonEvents extends Construct {
                 .enforceSsl(true)
                 .removalPolicy(config.removalPolicy())
                 .build();
+        acknowledge(deadLetterQueue, "AwsSolutions-SQS3",
+                "ADR 0001: this is the Pipe's dead-letter queue. cdk-nag only recognises SQS and Lambda dead-letter "
+                        + "settings, not a Pipe's.");
         LogGroup logGroup = LogGroup.Builder.create(this, "PipeLogGroup")
+                .dataProtectionPolicy(PersonalDataLogProtection.policy())
                 .retention(config.logRetention())
                 .removalPolicy(config.removalPolicy())
                 .build();
@@ -90,6 +97,8 @@ public final class PersonEvents extends Construct {
         bus.grantPutEventsTo(role);
         deadLetterQueue.grantSendMessages(role);
         logGroup.grantWrite(role);
+        acknowledgeStageKeyPrefixActions(role,
+                "ADR 0013: emitted by grantStreamRead and the dead-letter queue grant, scoped to the stage key.");
         this.pipe = pipe(storage, role, logGroup);
         // Pipes checks at creation that its role can read the source, so the role's policy must exist first.
         pipe.getNode().addDependency(role);

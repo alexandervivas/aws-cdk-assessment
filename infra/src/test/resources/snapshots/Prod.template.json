@@ -372,6 +372,37 @@
     "EventsPipeLogGroup3F55E076" : {
       "DeletionPolicy" : "Retain",
       "Properties" : {
+        "DataProtectionPolicy" : {
+          "Configuration" : {
+            "CustomDataIdentifier" : [ {
+              "Name" : "E164PhoneNumber",
+              "Regex" : "\\+[1-9]\\d{6,14}"
+            }, {
+              "Name" : "DutchPostalCode",
+              "Regex" : "[1-9][0-9]{3} [A-Z]{2}"
+            } ]
+          },
+          "Description" : "Masks phone numbers and addresses that reach the Person Service logs",
+          "Name" : "data-protection-policy-cdk",
+          "Statement" : [ {
+            "DataIdentifier" : [ "E164PhoneNumber", "DutchPostalCode", "arn:aws:dataprotection::aws:data-identifier/Address", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-DE", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-ES", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-FR", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-GB", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-IT" ],
+            "Operation" : {
+              "Audit" : {
+                "FindingsDestination" : { }
+              }
+            },
+            "Sid" : "audit-statement-cdk"
+          }, {
+            "DataIdentifier" : [ "E164PhoneNumber", "DutchPostalCode", "arn:aws:dataprotection::aws:data-identifier/Address", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-DE", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-ES", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-FR", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-GB", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-IT" ],
+            "Operation" : {
+              "Deidentify" : {
+                "MaskConfig" : { }
+              }
+            },
+            "Sid" : "redact-statement-cdk"
+          } ],
+          "Version" : "2021-06-01"
+        },
         "RetentionInDays" : 90
       },
       "Type" : "AWS::Logs::LogGroup",
@@ -520,6 +551,37 @@
     "FunctionLogGroup55B80E27" : {
       "DeletionPolicy" : "Retain",
       "Properties" : {
+        "DataProtectionPolicy" : {
+          "Configuration" : {
+            "CustomDataIdentifier" : [ {
+              "Name" : "E164PhoneNumber",
+              "Regex" : "\\+[1-9]\\d{6,14}"
+            }, {
+              "Name" : "DutchPostalCode",
+              "Regex" : "[1-9][0-9]{3} [A-Z]{2}"
+            } ]
+          },
+          "Description" : "Masks phone numbers and addresses that reach the Person Service logs",
+          "Name" : "data-protection-policy-cdk",
+          "Statement" : [ {
+            "DataIdentifier" : [ "E164PhoneNumber", "DutchPostalCode", "arn:aws:dataprotection::aws:data-identifier/Address", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-DE", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-ES", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-FR", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-GB", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-IT" ],
+            "Operation" : {
+              "Audit" : {
+                "FindingsDestination" : { }
+              }
+            },
+            "Sid" : "audit-statement-cdk"
+          }, {
+            "DataIdentifier" : [ "E164PhoneNumber", "DutchPostalCode", "arn:aws:dataprotection::aws:data-identifier/Address", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-DE", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-ES", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-FR", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-GB", "arn:aws:dataprotection::aws:data-identifier/PhoneNumber-IT" ],
+            "Operation" : {
+              "Deidentify" : {
+                "MaskConfig" : { }
+              }
+            },
+            "Sid" : "redact-statement-cdk"
+          } ],
+          "Version" : "2021-06-01"
+        },
         "RetentionInDays" : 90
       },
       "Type" : "AWS::Logs::LogGroup",

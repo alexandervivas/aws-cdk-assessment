@@ -13,10 +13,10 @@ Update this section when a phase lands.
 | 4 | Storage, function, API, stage and stack | Built |
 | 5a | Event bus, archive, Pipe, dead-letter queue | Built |
 | 5b | Event JSON Schema at `docs/events/person-created.v1.json`, contract test | Built |
-| 6 | Monitoring alarms and SNS topic, cdk-nag with justified suppressions, CloudWatch Logs data protection policy | 6a built, 6b planned |
+| 6 | Monitoring alarms and SNS topic, cdk-nag with justified suppressions, CloudWatch Logs data protection policy | Built |
 | 7 | End-to-end module with a test-only rule and queue, k6 load script | Planned |
 
-The alarms are built ([operations](operations.md#alarms)). Until 6b, the log groups have no data protection policy and cdk-nag does not run, so privacy relies on the code-level measures in [risks and privacy](risks-and-privacy.md).
+The alarms and the cdk-nag gate are described in [operations](operations.md#alarms) and [cdk-nag acknowledgements](operations.md#cdk-nag-acknowledgements), the log data protection policy in [risks and privacy](risks-and-privacy.md#privacy-and-pii).
 
 ## Next steps
 
@@ -29,4 +29,5 @@ The alarms are built ([operations](operations.md#alarms)). Until 6b, the log gro
 - Hand-written, tighter DynamoDB statements instead of `grant*` ([0013](adr/0013-iam-wildcard-exceptions.md)).
 - Revisit explicit KMS actions after the first real deploy ([0013](adr/0013-iam-wildcard-exceptions.md)).
 - After the first deploy, verify alarm delivery with `aws cloudwatch set-alarm-state`, then try re-adding `aws:SourceAccount` to CloudWatch's key grant ([0013](adr/0013-iam-wildcard-exceptions.md)).
-- Switch 415 to 400 if the owner prefers ([0012](adr/0012-unsupported-media-type.md)).
+- An alarm on `LogEventsWithFindings`, so a data protection match pages someone.
+- A WAF web ACL if callers ever include clients outside IAM ([0015](adr/0015-cdk-nag-acknowledged-findings.md)).
