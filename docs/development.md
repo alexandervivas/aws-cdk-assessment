@@ -98,3 +98,15 @@ k6 run -e API_URL="$E2E_API_URL" -e RATE=8 -e DURATION=2m load/k6/create-person.
 ```
 
 Without a local k6, use the image: `docker run --rm -i -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION grafana/k6:1.3.0 run --include-system-env-vars -e API_URL="$E2E_API_URL" - < load/k6/create-person.js`.
+
+## First deploy checklist
+
+Several behaviours can only be confirmed against a real account. Run these after the first deploy, and record the results in [roadmap](roadmap.md).
+
+1. **Account.** Use a dedicated AWS account, or get the account owner's agreement: the stack sets the account-level API Gateway logging role ([0014](adr/0014-account-level-apigateway-logging-role.md)).
+2. **Deploy.** `./mvnw -B package -DskipTests`, then `npx cdk deploy "Dev/*" -c devAccount=<dev> -c prodAccount=<prod>`, then the `E2eSupportStack` command above.
+3. **End-to-end.** Run `./mvnw verify -Pe2e -pl e2e -am` with `E2E_API_URL`, `E2E_QUEUE_URL` and `AWS_REGION` set. Note the status the missing-Content-Type case logged, and check that `text/plain` really reaches the handler's 415 ([0012](adr/0012-unsupported-media-type.md)).
+4. **Alarm delivery.** Subscribe an email address to the alarm topic, then run `aws cloudwatch set-alarm-state --alarm-name <LambdaErrors alarm> --state-value ALARM --state-reason test` and confirm the notification arrives. Then try adding `aws:SourceAccount` to CloudWatch's key grant and repeat ([0013](adr/0013-iam-wildcard-exceptions.md)).
+5. **Pipe metrics namespace.** `aws cloudwatch list-metrics --namespace AWS/EventBridge/Pipes --metric-name ExecutionFailed` returns the pipe. If it doesn't, fix the `PipeFailures` alarm's namespace.
+6. **Load.** Run k6 at the default rate. p95 should stay under 1 s, with no 429s below the dev throttle.
+7. **Logs.** Search the function log group for a test person's name, phone number and postal code. There should be no hits, and the data protection policy should report no findings.
