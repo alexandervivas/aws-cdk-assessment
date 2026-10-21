@@ -1,12 +1,13 @@
 package com.tikkie.person.infra.constructs;
 
+import static com.tikkie.person.infra.IamWildcards.asStrings;
+import static com.tikkie.person.infra.IamWildcards.json;
 import static com.tikkie.person.infra.constructs.PersonFunctionTemplates.onlyLogicalId;
 import static com.tikkie.person.infra.constructs.PersonFunctionTemplates.tableId;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikkie.person.infra.EnvironmentConfig;
+import com.tikkie.person.infra.IamWildcards;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,12 +23,6 @@ import software.amazon.awscdk.assertions.Template;
 class PersonFunctionPermissionsTest {
 
     private static final String STAGES = "com.tikkie.person.infra.constructs.PersonFunctionTemplates#stages";
-    private static final ObjectMapper JSON = new ObjectMapper();
-    // X-Ray's write actions support no resource-level permissions, so "*" is their only valid resource (ADR 0013).
-    private static final Map<String, Object> XRAY_WRITE_STATEMENT = Map.of(
-            "Effect", "Allow",
-            "Action", List.of("xray:PutTelemetryRecords", "xray:PutTraceSegments"),
-            "Resource", "*");
     private static final Set<String> TABLE_READ_ACTIONS = Set.of(
             "dynamodb:GetItem", "dynamodb:BatchGetItem", "dynamodb:Query", "dynamodb:Scan",
             "dynamodb:ConditionCheckItem", "dynamodb:GetRecords", "dynamodb:GetShardIterator");
@@ -80,8 +75,8 @@ class PersonFunctionPermissionsTest {
 
         assertThat(actionsOn(template, logGroupId)).containsExactlyInAnyOrder("logs:CreateLogStream", "logs:PutLogEvents");
         for (Map<String, Object> statement : policyStatements(template)) {
-            if (asList(statement.get("Action")).stream().anyMatch(action -> action.startsWith("logs:"))) {
-                assertThat(asList(statement.get("Resource"))).as(json(statement)).allMatch(resource -> resource.contains(logGroupId));
+            if (asStrings(statement.get("Action")).stream().anyMatch(action -> action.startsWith("logs:"))) {
+                assertThat(asStrings(statement.get("Resource"))).as(json(statement)).allMatch(resource -> resource.contains(logGroupId));
             }
         }
     }
@@ -99,28 +94,24 @@ class PersonFunctionPermissionsTest {
     @MethodSource(STAGES)
     void grantsNoIndexResources(EnvironmentConfig config) {
         for (Map<String, Object> statement : policyStatements(synth(config))) {
-            assertThat(asList(statement.get("Resource"))).as(json(statement)).noneMatch(resource -> resource.contains("index/*"));
+            assertThat(asStrings(statement.get("Resource"))).as(json(statement)).noneMatch(resource -> resource.contains("index/*"));
         }
     }
 
     @ParameterizedTest
     @MethodSource(STAGES)
-    void usesWildcardsOnlyForTheXRayWriteStatement(EnvironmentConfig config) {
-        for (Map<String, Object> statement : policyStatements(synth(config))) {
-            boolean wildcardResource = asList(statement.get("Resource")).contains("*");
-            boolean wildcardAction = asList(statement.get("Action")).stream()
-                    .anyMatch(action -> action.equals("*") || action.endsWith(":*"));
-            if (wildcardResource || wildcardAction) {
-                assertThat(statement).as(json(statement)).isEqualTo(XRAY_WRITE_STATEMENT);
-            }
-        }
+    void usesWildcardsOnlyForTheAdr0013Exceptions(EnvironmentConfig config) {
+        Template template = synth(config);
+        String stageKeyId = onlyLogicalId(template, "AWS::KMS::Key");
+
+        assertThat(IamWildcards.disallowedStatements(policyStatements(template), stageKeyId)).isEmpty();
     }
 
     private static Set<String> actionsOn(Template template, String logicalId) {
         Set<String> actions = new TreeSet<>();
         for (Map<String, Object> statement : policyStatements(template)) {
-            if (asList(statement.get("Resource")).stream().anyMatch(resource -> resource.contains("\"" + logicalId + "\""))) {
-                actions.addAll(asList(statement.get("Action")));
+            if (asStrings(statement.get("Resource")).stream().anyMatch(resource -> resource.contains("\"" + logicalId + "\""))) {
+                actions.addAll(asStrings(statement.get("Action")));
             }
         }
         return actions;
@@ -136,22 +127,6 @@ class PersonFunctionPermissionsTest {
         }
         assertThat(statements).isNotEmpty();
         return statements;
-    }
-
-    private static List<String> asList(Object value) {
-        List<?> values = value instanceof List<?> list ? list : List.of(value);
-        return values.stream().map(PersonFunctionPermissionsTest::json).toList();
-    }
-
-    private static String json(Object value) {
-        if (value instanceof String text) {
-            return text;
-        }
-        try {
-            return JSON.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     private static Template synth(EnvironmentConfig config) {
