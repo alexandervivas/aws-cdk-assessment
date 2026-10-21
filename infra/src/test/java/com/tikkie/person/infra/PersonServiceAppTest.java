@@ -113,6 +113,16 @@ class PersonServiceAppTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"eusc-de-east-1", "us-gov-west-1"})
+    void acceptsSovereignAndGovCloudRegionCodes(String region) {
+        App app = withCdkJsonContext(Map.of("region", region));
+
+        PersonServiceApp.addStages(app, Map.of());
+
+        assertThat(stage(app, "Prod").stack().getRegion()).isEqualTo(region);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"Europe", "eu_west_1", "EU-WEST-1", "eu-west"})
     void rejectsARegionThatIsNotARegionCode(String region) {
         assertThatIllegalArgumentException()

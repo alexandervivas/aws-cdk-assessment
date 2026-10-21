@@ -11,7 +11,7 @@ public final class PersonServiceApp {
     static final String DEFAULT_REGION = "eu-west-1";
 
     private static final Pattern ACCOUNT_ID = Pattern.compile("^\\d{12}$");
-    private static final Pattern REGION_CODE = Pattern.compile("^[a-z]{2}(-[a-z]+)+-\\d{1,2}$");
+    private static final Pattern REGION_CODE = Pattern.compile("^[a-z]{2,4}(-[a-z]+)+-\\d{1,2}$");
 
     private PersonServiceApp() {
     }
