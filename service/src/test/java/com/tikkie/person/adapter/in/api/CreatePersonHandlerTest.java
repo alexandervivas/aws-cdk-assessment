@@ -293,7 +293,9 @@ class CreatePersonHandlerTest {
 
     @Test
     void base64BodyThatIsNotUtf8IsAMalformedRequest() throws Exception {
-        byte[] notUtf8 = {'{', '"', 'c', 'i', 't', 'y', '"', ':', '"', (byte) 0xC3, (byte) 0x28, '"', '}'};
+        byte[] notUtf8 = {
+            '{', '"', 'f', 'i', 'r', 's', 't', 'N', 'a', 'm', 'e', '"', ':', '"', (byte) 0xC3, (byte) 0x28, '"', '}'
+        };
         APIGatewayProxyRequestEvent request = post(Base64.getEncoder().encodeToString(notUtf8))
                 .withIsBase64Encoded(true);
 
