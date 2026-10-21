@@ -22,10 +22,10 @@ public record CanonicalRequest(String value) {
     }
 
     // Built from normalised values, so a retry that differs only in formatting replays instead of conflicting.
-    // Joining on U+001F is unambiguous: the domain parsers reject control characters (FreeText for the
-    // address text, an allow-list for names, fixed formats for phone, postal code and country), so no value
-    // contains the separator. Stored fingerprints depend on this exact form, so any change needs a new version
-    // tag. The presence flag keeps an absent addition distinct from any present one.
+    // Joining on U+001F is unambiguous only while no value contains it. The domain parsers reject control
+    // characters, but records built through their public constructors skip the parsers, so each value is
+    // checked here. Stored fingerprints depend on this exact form, so any change needs a new version tag.
+    // The presence flag keeps an absent addition distinct from any present one.
     public static CanonicalRequest of(PersonDetails details) {
         Address address = details.address();
         List<String> values = List.of(
@@ -40,6 +40,9 @@ public record CanonicalRequest(String value) {
                 address.postalCode().value().reveal(),
                 address.city().reveal(),
                 address.countryCode().value());
+        if (values.stream().anyMatch(component -> component.contains(UNIT_SEPARATOR))) {
+            throw new IllegalArgumentException("request component must not contain the field separator");
+        }
         return new CanonicalRequest(String.join(UNIT_SEPARATOR, values));
     }
 
